@@ -1,0 +1,60 @@
+--basics.quig
+--simple example with animation and player input
+
+
+--create an empty table to hold the player info
+player={}
+
+--setup the player
+player.init = function()
+	--position (center the player):
+	player.x=view_width/2
+	player.y=view_height/2
+	--what part of the sprite sheet to use:
+	player.tx=0
+	player.ty=0
+	--how fast do we want the player to move when a key is pressed:
+	player.speed=1
+	--how fast do we want the animation to move? (bigger is slower)
+	player.anim_speed=30;
+	
+end
+
+--every frame, change what happens
+player.update = function()
+	--handle input
+	if key(key_left) > 0 then --move left
+		player.tx=0
+		player.x=player.x-player.speed
+	elseif key(key_right) > 0 then --move right
+		player.tx=1
+		player.x=player.x+player.speed
+	end
+	if key(key_up) > 0 then --move up
+		player.y=player.y-player.speed
+	elseif key(key_down) > 0 then --move down
+		player.y=player.y+player.speed
+	end
+	--animate walking
+	player.ty=0
+	if t%player.anim_speed < player.anim_speed//2 then
+		player.ty=player.ty+1
+	end
+	--draw the player to the screen
+	spr(player.x,player.y,2,player.tx,player.ty)
+end
+
+--setup the player and the timer
+function init()
+	player.init()
+	t=0
+end
+
+--run the game
+function step()
+	cls(96,96,96) --clear the screen
+	text("Welcome to ",0,0,1,0) --intro text
+	text("quig!",84,0,2,1) --change the font style
+	player.update() --update the player
+	t=t+1 --update the timer
+end

@@ -1,0 +1,27 @@
+-- deep-fly -- a 3D action game where you use your lock-on attack to strike down enemies and slide through the skies on rails!
+-- deep-fly is (C) 2020 B.M.Deeal. deep-fly is distributed under the GPLv3.
+
+-- This file expects word-wrapping and a tab width of 4.
+
+--[[
+	-about-
+	Soar through the depths of the sky while sliding along rails! Avoid enemy attacks, use them as trampolines, and ultimately make it to the goal. deep-fly is a 3D platform action game where you rush ahead to the end, never looking back.
+	
+	-controls-
+	The controls are:
+		[d-pad  start  a b]
+	* A-button -- jump if not in air, lock-on attack if in air
+	* B-button -- tap to go faster on rails
+	* D-pad -- move, select target by aiming and moving towards it
+	* Start -- pause
+	
+	-how to play-
+	Run forward through each stage, avoiding obstacles, defeating enemies, and sliding down rail paths. 
+	
+--]]
+
+function init()
+end
+
+function step()
+end

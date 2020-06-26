@@ -1,0 +1,215 @@
+--get-the-dot! -- a simple game where you chase a dot around the screen, written as part of a game making tutorial for quig
+--Written in 2020 by B.M.Deeal. get-the-dot! is distributed under CC0. NO WARRANTY. See license-CC0.txt for details.
+
+-- This file expects word-wrapping and a tab width of 4.
+
+--[[
+To the extent possible under law, the person who associated CC0 with get-the-dot! has waived all copyright and related or neighboring rights to get-the-dot!.
+
+You should have received a copy of the CC0 legalcode along with this work.  If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
+--]]
+
+--player control
+player={}
+player.best_score=0
+player.last_score=0
+player.init=function()
+	--center the player on the screen
+	player.x=view_width/2
+	player.y=view_height/2+12 --the 12 is to accomodate the 24px tall score area
+	--reset the score
+	player.score=0
+	--player movement variables
+	player.maxspeed_normal=1
+	player.maxspeed_boost=2
+	player.maxspeed=player.maxspeed_normal
+	player.boost=60*2.5
+end
+
+--the player is just a plain white rectangle
+player.draw=function()
+	squ(player.x, player.y, 1, 255,255,255)
+end
+
+--what does the player do every frame?
+player.update=function()
+	--player movement
+	--boost
+	player.maxspeed=player.maxspeed_normal
+	if (key(key_a)>0 or key(key_b)>0) and player.boost>0 then
+		player.boost=player.boost-1
+		player.maxspeed=player.maxspeed_boost
+	end
+	--normal movement
+	if key(key_up)>0 then
+		player.y=player.y-player.maxspeed
+	end
+	if key(key_down)>0
+		then player.y=player.y+player.maxspeed
+	end
+	if key(key_left)>0
+		then player.x=player.x-player.maxspeed
+	end
+	if key(key_right)>0
+		then player.x=player.x+player.maxspeed
+	end
+	
+	--keep the player in bounds
+	--the player is 16x16, and the position is centered, so we have 8px on each side to account for
+	--the top bar is 24px tall, so the playable area is a little smaller than the full screen
+	if player.x<8 then --left
+		player.x=8
+	end
+	if player.y<32 then --top
+		player.y=32
+	end
+	if player.x>view_width-8 then --right
+		player.x=view_width-8
+	end
+	if player.y>view_height-8 then --bottom
+		player.y=view_height-8
+	end
+	
+end
+
+--dot control
+dot={}
+
+--move the dot around
+--this is mathematically unsound (it's possible mathematically to get a long string of clustered numbers that just fit in where the player is)
+--but a computer RNG that clustered its values like that would be severely suspect, so we blithely check forever
+--TODO (for the reader): make this more fair on the player -- you can get a string of far left, far right, far left, etc spawns and the player can't do anything whatsoever if they've already used their boost up
+dot.teleport=function()
+	--ensure that the dot never lands exactly on the player
+	repeat
+		--move the dot around
+		dot.x=math.random(4,view_width-4)
+		dot.y=math.random(4+24,view_height-4) --we leave some space at the top for the status bar
+	until not dot.collide()
+end
+
+--all that needs to happen is to the dot somewhere on the screen
+--making the dot do cool stuff like move around and bounce off the walls is left as an exercise for the reader
+dot.init=function()
+	--score bonus
+	dot.bonusmax=60*5 --quig runs at 60hz, so you get five seconds to catch the dot at the start of the game
+	dot.bonus=dot.bonusmax
+	--put the dot somewhere
+	dot.teleport()
+end
+
+--reposition the dot
+dot.collide=function()
+	return squcol(dot.x,dot.y,0.5, player.x,player.y,1)
+end
+
+dot.update=function()
+	--check collision
+	if dot.collide() then
+		--move the dot around
+		dot.teleport()
+		--player bonuses
+		player.score=player.score+dot.bonus
+		player.boost=player.boost+3
+		--decrease the bonus/time
+		--we also try to keep the time from getting TOO short, although it is possible for it to be impossible to reach the dot still
+		--fixing this while keeping the game challenging is left as an exercise for the reader
+		if dot.bonusmax > 60*2.5 then
+			dot.bonusmax=dot.bonusmax-5
+		end
+		--reset the bonus
+		dot.bonus=dot.bonusmax
+	end
+end
+
+dot.draw=function()
+	squ(dot.x,dot.y,0.5, 255,255,0)
+end
+
+--re-initialize everything
+--this function is REQUIRED by quig
+--we also call it when the player loses
+function init()
+	--start the game paused
+	paused=true
+	--no game is running
+	game_over=true
+	--set up our objects
+	player.init()
+	dot.init()
+end
+
+--draw the information bar
+function topbar()
+	rect(0,0,view_width,24,192,192,192) --top bar background
+	text(string.format("score:%07d\n best:%07d\n last:%07d", player.score, player.best_score, player.last_score),0,0,1,2) --score information
+	text(string.format("+%03d", dot.bonus),view_width-16*4,0,2,2) --bonus/timer, in big text because it's the most important thing
+	text(string.format("boost:%03d", player.boost), view_width-8*9,16,1,2) --how much boost can the player use
+end
+
+function bonustiming()
+	--constantly tick down the bonus
+	dot.bonus=dot.bonus-1
+	--if the bonus runs out, the game is over
+	if dot.bonus<0 then
+		--remember the best score and the previous one between runs
+		player.last_score=player.score
+		if player.score > player.best_score then
+			player.best_score=player.score
+		end
+		--reset game
+		init()
+	end
+end
+
+function pauseupdate()
+	--informative messages
+	text("press start to continue!",0,view_height-8,1,0)
+	--if there isnt' a game running, show the title screen
+	if game_over then
+		text("get-the-dot!", view_width/2-12*16/2, view_height/2-8,2,1)
+		text("game over!", 0,24,1,3)
+		text("controls:\n* D-pad: move\n* A/B-button: boost",48,88,1,3)
+	--otherwise, we're merely paused
+	else
+		dot.draw()
+		player.draw()
+		text("game paused!", view_width/2-4*12,view_height/2,1,1)
+	end
+	
+	--force the RNG to change based on how long the game is paused
+	--this is a bit of a dirty hack
+	--quig will have a proper way to initialize the RNG at some point, but it doesn't right now
+	--we can't just do math.randomseed(os.time()) because quig will disable the os.* functions (it's a bit annoying that lua throws reading the system clock together with running arbitrary commands)
+	--the first calls in the game will always return the same value, so the very first dot position is constant on game startup
+	math.random()
+end
+
+--main game loop
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	topbar()
+	
+	--handle the game when it's stopped
+	--here, "paused" counts as both when the game isn't running and when the player pauses the game
+	--this is simple, but not the best way
+	if key(key_start)==1 then paused=not paused end --pause the game if we press start
+	if paused then
+		pauseupdate()
+		return
+	end
+	
+	--if the game is running, then it can't be over
+	game_over=false
+	
+	--update everything in the game
+	player.update()
+	dot.update()
+	
+	--object drawing
+	dot.draw()
+	player.draw()
+	
+	--count things down, handle if the game ends
+	bonustiming()
+end

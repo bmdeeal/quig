@@ -1,0 +1,59 @@
+--rotation-test.quig -- a simple example with code for handling rotations of points
+--Written in 2020 by B.M.Deeal. rotation-test.quig is distributed under CC0. NO WARRANTY. See license-CC0.txt for details.
+
+--[[
+To the extent possible under law, the person who associated CC0 with rotation-test.quig has waived all copyright and related or neighboring rights to rotation-test.quig.
+
+You should have received a copy of the CC0 legalcode along with this work.  If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
+--]]
+
+--center of the screen
+scx=view_width/2
+scy=view_height/2
+
+--rotate a point around another at a given angle
+--ox,oy is the origin point to rotate around
+--x,y is where the point to rotate is relative to the origin
+--angle is how much to rotate (in radians)
+function rotate(ox,oy,x,y,angle)
+	local rx,ry
+	--rotate around origin
+	rx=x*math.cos(angle)-y*math.sin(angle)+ox
+	ry=x*math.sin(angle)+y*math.cos(angle)+oy
+	return rx,ry
+end
+
+--get the direction between two points
+--ox,oy is the origin point to look from
+--x,y is the target point to look at
+--returns an angle in radians
+function getdir(ox,oy,x,y)
+	return math.atan2(y-oy,x-ox)
+end
+
+--set up everything
+function init()
+	t=0
+	kx,ky=view_width/2,10
+end
+
+--main loop
+function step()
+	cls(32,32,32)
+	--track the player's position
+	local rx,ry=rotate(scx,scy,32,0,getdir(scx,scy,kx,ky))
+	--how to "play"
+	text("rotation test program",0,0,1,0)
+	text("use d-pad to move",0,view_height-8,1,1)
+	--draw some shapes
+	squ(scx, scy, 1, 0, 255, 0) --center rectangle
+	squ(rx,ry,0.5,255,255,0) --object that follows where the player is relative to the center
+	squ(kx,ky,0.5,0,255,255) --the player
+	--player movement
+	if key(key_left)>0 then kx=kx-1 end
+	if key(key_right)>0 then kx=kx+1 end
+	if key(key_up)>0 then ky=ky-1 end
+	if key(key_down)>0 then ky=ky+1 end
+	--reset
+	if key(key_start)==1 then init() end
+end

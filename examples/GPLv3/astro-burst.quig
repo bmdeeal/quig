@@ -1,0 +1,1394 @@
+-- astro-burst -- a simple time-attack space driving game for quig
+-- astro-burst is (C) 2020 B.M.Deeal. astro-burst is distributed under the GPLv3.
+
+-- This file expects word-wrapping and a tab width of 4.
+
+--[[
+	This program is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+    See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this program.
+    If not, see <https://www.gnu.org/licenses/>.
+--]]
+
+
+--[[
+	-about-
+	astro-burst is a cosmic race against the clock!
+	Stay between the gates and don't run out of time!
+		
+	-control-
+	The controls are:
+		[d-pad  start  a b]
+	* A-button -- accelerate
+	* B-button -- brake
+	* Left/Right -- move
+	* Start -- pause
+	
+	-how to play-
+	Steer the spaceship through the gates with the d-pad. As you drive, you will encounter several gates with icons above them. These gates affect your ship in different ways:
+	* Checkpoint -- Every checkpoint gate you pass through gives you a little bit more time before you are disqualified.
+	* Ice -- Your ship will move a bit faster, but your controls are also far more sensitive. Exciting, but also dangerous. It's quite hard to recover when on ice, because your turning is very, very sensitive.
+	* Slow -- Your ship will slow down quite a bit. Turning speed is not impacted. You can't avoid it, so it can even help you take particularly hard corners... but in some cases, you might find yourself turning too hard as you pass through it and be sent flying off!
+	* Magnet -- Your ship will be attracted away from the center. Stay near the center line to avoid or reduce the effect, and correct your course as needed.
+	* Goal -- The end! Passing through a goal gate ends the course and displays your score and time. Make some records and then smash through them!
+	
+	-scoring-
+	Scoring boils down to how well you can follow the dotted line in the middle.
+	In astro-burst, you don't lose any forward speed while turning, so the score system is designed to track how clean a line you can keep.
+	This doesn't mean you can really slow down though -- you're slowly, but constantly losing points! Keep passing between the very center of the barriers to increase your score, and don't go out-of-bounds, or you'll lose a lot of points very quickly!
+	A run that gets the best time mightn't be the one that gets the best score and vice-versa, but you still need to be quite quick to get either.
+	
+	---
+	
+	TODO:
+	* how to play screen
+	* more levels (in progress)
+	* "campaigns" -- just sets of levels at fixed speedclasses to clear
+	* major code cleanups -- in particular, a lot of things are done in a rather ad-hoc fashion
+	* attract screen? kinda pointless, but a nice bit of extra polish
+	* the code commenting in some spots is bad -- we explain everything because this is an example, but some stuff is underexplained while some stuff is way overexplained
+	
+	other, possibly far-off ideas:
+	* score/time saving (quig now has some file handling support but it needs major testing)
+	* music/sound (music might be out, but sound is a maybe; this requires support in quig, so this might be fairly far off)
+--]]
+
+--convert a time in frames to mm'ss"cc format, where m is minutes, s is seconds, and c is centiseconds
+function timeToString(n)
+	local m=math.floor((n/60)/60)
+	local s=math.floor((n/60)%60)
+	local cs=math.floor(((n/60)*100)%100)
+	return string.format("%02d'%02d\"%02d", m, s, cs)
+end
+
+--how fast to go/difficulty setting
+speed_class=3; --1: easy, 2: basic, 3: normal, 4: turbo, 5: maniac
+
+--make a new table for holding speed class related stuff
+--TODO: this gets called other places, when they could and should just use the sc table
+--didn't think things through at the time, paying for it now
+function makeSpeedTable()
+	return {
+		{name="easy"},
+		{name="basic"},
+		{name="normal"},
+		{name="turbo"},
+		{name="maniac"}
+	}
+end
+sc=makeSpeedTable()
+--acceleration speeds
+sc[1].accel=0.0075 --easy
+sc[2].accel=0.009
+sc[3].accel=0.010 --normal
+sc[4].accel=0.011
+sc[5].accel=0.0135 --maniac
+
+--background colors for each speed class
+--wanted them to be wildly different hues, but it didn't really look right
+--in fact, picking these was very hard
+sc[1].bg={r=2,  g=2,  b=26}
+sc[2].bg={r=4,  g=4,  b=25}
+sc[3].bg={r=6,  g=6,  b=24}
+sc[4].bg={r=7,  g=6,  b=20}
+sc[5].bg={r=6,  g=4,  b=16}
+
+--TODO: ALL of this below really needs to be moved into the sc table
+--holds how much time you get at the start
+start_times=makeSpeedTable()
+start_times[1].time=40
+start_times[2].time=30
+start_times[3].time=20
+start_times[4].time=18
+start_times[5].time=17
+--holds how much time passing a checkpoint gate gives you
+time_bonuses=makeSpeedTable()
+time_bonuses[1].time=28
+time_bonuses[2].time=25
+time_bonuses[3].time=22
+time_bonuses[4].time=21
+time_bonuses[5].time=20
+--save best times/scores
+best_times=makeSpeedTable()
+best_scores=makeSpeedTable()
+
+--far background
+stars={}
+stars.init=function()
+	stars.max=10
+	for ii=1,stars.max do
+		stars[ii]={}
+		stars[ii].x=math.random(view_width)
+		stars[ii].y=math.random(view_height)
+		stars[ii].t=math.random(5,7)
+		stars[ii].scale=math.random(6,10)/10
+	end
+end
+--slap some stars on screen
+stars.draw=function()
+	for ii=1,stars.max do
+		spr(stars[ii].x, stars[ii].y, stars[ii].scale, stars[ii].t, 0)
+	end
+end
+
+--camera position and etc
+camera={}
+camera.init=function()
+	camera.x=0
+	camera.y=-400
+	camera.cx=view_width/2
+	camera.cy=view_height/2
+	camera.fov=16
+	camera.near=0.5
+end
+
+--stage handling
+levels={}
+levels.create={}
+levels.init=function()
+	levels.length=0 --how many objects in the level
+	levels.c_distance=0
+	levels.c_width=4000
+	levels.c_offset=0
+	levels.c_flag=0
+	levels.offset_diff=0
+	levels.width_diff=0
+	levels.index=1
+end
+--objects are generated with linearly interpolated widths and offsets
+levels.add=function(w,o,d,f)
+	if not f then f=0 end
+	local n=levels.length+1
+	levels.length=n
+	levels[n]={width=w, offset=o, distance=d, flag=f} 
+end
+--get track data to generate objects with
+levels.get=function()
+	local flag=0
+	--every time we move ahead, we get the next item
+	levels.c_distance=levels.c_distance-1
+	if (levels.c_distance<0) then
+		levels.index=levels.index+1
+		--this shouldn't happen if there's a goal area, but we force an out of bounds condition if we go past the end of the level
+		if (levels.index>levels.length) then
+			return -30000,0
+		end
+		--get the terrain type, how long the segment is, and then calculate the interpolation for the width and offset
+		levels.c_flag=levels[levels.index].flag
+		levels.c_distance=levels[levels.index].distance
+		levels.width_diff=(levels[levels.index].width-levels.c_width)/levels.c_distance
+		levels.offset_diff=(levels[levels.index].offset-levels.c_offset)/levels.c_distance
+	else
+		--interpolate each road element to the given width/offset
+		levels.c_width=levels.c_width+levels.width_diff
+		levels.c_offset=levels.c_offset+levels.offset_diff
+	end
+	return levels.c_width,levels.c_offset,levels.c_flag
+end
+
+--beginning preamble to every level
+levels.start=function()
+	levels.init()
+	levels.add(4000,0,100) --this actually gets skipped
+	levels.add(4000,0,20)
+end
+
+--goal area for every level
+levels.finish=function()
+	levels.add(5000,0,30)
+	levels.add(10,0,20,2) --goal!
+end
+
+--entirely for debug purposes
+levels.create[0]=function()
+	levels.start()
+	levels.finish()
+end
+
+--levels
+levels.create[1]=function()
+	levels.start()
+	levels.add(1400,2900,20)
+	levels.add(1300,5000,20)
+	levels.add(3000,0,40)
+	levels.add(4000,10000,30)
+	levels.add(2000,0,30)
+	levels.add(2000,0,25,1)
+	levels.add(4000,-10000,20)
+	levels.add(3000,-12000,10)
+	levels.add(4000,-20000,30)
+	levels.add(2000,0,100)
+	levels.add(4000,-6000,25,1)
+	levels.add(4000,-7000,10)
+	levels.add(4000,-19000,12)
+	levels.add(4000,7000,40)
+	levels.add(3000,7000,20)
+	levels.add(2000,7000,30)
+	levels.add(4000,0,50)
+	levels.add(1000,4000,20)
+	levels.add(1200,4000,12,1)
+	levels.add(2000,10000,20)
+	levels.add(3000,16000,20)
+	levels.add(3500,20000,10)
+	levels.add(2000,0,40)
+	levels.add(2000,0,22,1)
+	levels.add(3000,10000,30)
+	levels.add(3000,20000,24)
+	levels.add(3000,30000,15)
+	levels.add(3000,40000,12)
+	levels.add(3000,40000,50)
+	levels.add(4000,0,50)
+	levels.add(2000,0,20)
+	levels.add(1000,500,10)
+	levels.add(1200,0,30,1)
+	levels.add(1400,15000,60)
+	levels.add(1600,30000,40)
+	levels.add(2000,30000,30)
+	levels.add(3000,15000,20)
+	levels.add(3000,0,60)
+	levels.finish()
+end
+
+levels.create[2] = function()
+	levels.start()
+	levels.add(4000,0,50)
+	levels.add(3000,2000,30,3)
+	levels.add(1000,-1600,30,3)
+	levels.add(2500,-1700,30,1)
+	levels.add(1000,2000,30,3)
+	levels.add(3000,0,40)
+	levels.add(1000,1500,10)
+	levels.add(5000,0,10)
+	levels.add(1000,-1500,10)
+	levels.add(5000,0,10)
+	levels.add(1000,1500,10)
+	levels.add(5000,0,10)
+	levels.add(2000,-10000,20)
+	levels.add(2500,-10000,22,1)
+	levels.add(1500,-10000,20)
+	levels.add(2000,-10000,10)
+	levels.add(2000,-15000,10)
+	levels.add(3000,-25000,13)
+	levels.add(1500,-24000,40)
+	levels.add(2000,-24000,30)
+	levels.add(3000,-10000,20)
+	levels.add(2500,-2000,30)
+	levels.add(2000,0,22,1)
+	levels.add(2000,0,30)
+	levels.add(2000,3000,20)
+	levels.add(900,0,20)
+	levels.add(1000,0,10)
+	levels.add(2000,-3500,20)
+	levels.add(900,0,20)
+	levels.add(2000,5000,25)
+	levels.add(1000,0,20)
+	levels.add(2000,-5500,25)
+	levels.add(1000,0,20)
+	levels.add(2000,0,42,1)
+	levels.add(3000,0,10)
+	levels.add(3500,5000,20)
+	levels.add(4000,10000,18)
+	levels.add(3900,20000,16)
+	levels.add(4000,30000,14)
+	levels.add(2000,30000,14)
+	levels.add(800,30000,40)
+	levels.add(2500,30000,30)
+	levels.add(3000,20000,20)
+	levels.add(3100,10000,10)
+	levels.add(2000,10000,10)
+	levels.add(3500,10000,10)
+	levels.add(2000,20000,20)
+	levels.add(1900,0,30)
+	levels.add(2000,0,25,1)
+	levels.add(2000,0,30)
+	levels.add(1200,0,20)
+	levels.add(1100,2800,25)
+	levels.add(1000,3000,20)
+	levels.add(1200,0,20)
+	levels.add(1000,0,20)
+	levels.add(3000,0,10)
+	levels.add(1000,3000,20)
+	levels.add(3000,0,10)
+	levels.add(800,-3000,20)
+	levels.add(3000,0,10)
+	levels.add(2000,-2000,40)
+	levels.add(2800,0,10)
+	levels.add(3000,10000,10)
+	levels.add(800,6000,30)
+	levels.add(800,6000,20,1)
+	levels.add(800,6000,30)
+	levels.add(3000,0,30,3)
+	levels.finish()
+end
+
+levels.create[3] = function()
+	levels.start()
+	levels.add(4000,1000,30)
+	levels.add(4000,5000,30)
+	levels.add(4000,6000,35,1)
+	levels.add(3500,13000,50)
+	levels.add(2000,0,40,3)
+	levels.add(1300,6000,40,3)
+	levels.add(2000,16000,40,3)
+	levels.add(1000,32000,40,3)
+	levels.add(2100,36000,20,3)
+	levels.add(2000,31000,20)
+	levels.add(4000,31000,30,1)
+	levels.add(4000,20000,10)
+	levels.add(5000,0,30)
+	levels.add(1000,-10000,20)
+	levels.add(3000,-10000,20)
+	levels.add(1000,0,40)
+	levels.add(5000,0,30)
+	levels.add(1000,-10000,20)
+	levels.add(3000,-15000,20)
+	levels.add(1000,0,40)
+	levels.add(2000,100,35,1)
+	levels.add(5000,0,30)
+	levels.add(1000,-9000,20)
+	levels.add(3000,-10000,20)
+	levels.add(1200,0,40)
+	levels.add(4000,1000,8)
+	levels.add(2000,-4000,60,3)
+	levels.add(2000,29000,60,3)
+	levels.add(2000,29000,30)
+	levels.add(2000,29000,35,1)
+	levels.add(4000,10000,30)
+	levels.add(4000,0,20)
+	levels.add(3000,-9500,20)
+	levels.add(2000,20000,60)
+	levels.add(1200,30000,20)
+	levels.add(4000,35000,15,3)
+	levels.add(1600,30000,50)
+	levels.add(2000,10000,50)
+	levels.add(1200,400,40,1)
+	levels.add(5200,1400,30)
+	levels.add(1200,-2700,30)
+	levels.add(5200,400,30)
+	levels.add(1200,1700,30)
+	levels.add(5200,400,30)
+	levels.add(900,3000,40,3)
+	levels.add(1300,-2000,50)
+	levels.add(2200,1500,40)
+	levels.add(1100,1200,30)
+	levels.finish()
+end
+
+levels.create[4] = function()
+	levels.start()
+	levels.add(2000,0,30)
+	levels.add(2000,4000,30,4)
+	levels.add(2000,0,30)
+	levels.add(4000,0,20,4)
+	levels.add(2000,180,20,4)
+	levels.add(3000,0,20,4)
+	levels.add(2200,-6000,20)
+	levels.add(3000,-5000,5,5)
+	levels.add(3000,10800,15)
+	levels.add(2400,22040,20)
+	levels.add(2700,20040,10)
+	levels.add(3000,12000,10)
+	levels.add(2300,-1000,25)
+	levels.add(2000,-1000,40,1)
+	levels.add(4000,0,20)
+	levels.add(3000,2000,10)
+	levels.add(5000,20000,20)
+	levels.add(1000,20000,20)
+	levels.add(3000,10000,20)
+	levels.add(1000,9000,30,3)
+	levels.add(2000,5000,20,3)
+	levels.add(1000,0,15)
+	levels.add(1000,0,15,1)
+	levels.add(1000,1000,60)
+	levels.add(1000,15000,30)
+	levels.add(1000,15000,30)
+	levels.add(2000,6000,20)
+	levels.add(1000,6000,20)
+	levels.add(2000,-8000,30)
+	levels.add(1500,-4000,15,1)
+	levels.add(1000,0,20)
+	levels.add(4000,2000,20)
+	levels.add(1000,0,20)
+	levels.add(3000,-2000,20)
+	levels.add(1000,1200,20)
+	levels.add(1500,1200,20,1)
+	levels.add(2000,1200,20)
+	levels.add(1800,-2000,20,4)
+	levels.add(1800,-8000,20,4)
+	levels.add(1800,-7200,0)
+	levels.add(1800,-13000,20,3)
+	levels.add(1800,-8000,20)
+	levels.add(2600,-1000,20,4)
+	levels.finish()
+end
+
+levels.create[5]=function()
+levels.start()
+levels.add(1000,0,50)
+levels.add(1000,-3000,40)
+levels.add(900,1000,25,1)
+levels.add(900,100,40)
+levels.add(1000,10000,40)
+levels.add(1000,10000,40)
+levels.add(4000,-4000,20)
+levels.add(4000,-4000,20)
+levels.add(2000,-4000,20,1)
+levels.add(1000,13000,30,3)
+levels.add(3000,13000,10)
+levels.add(3300,4000,30)
+levels.add(3300,4000,5)
+levels.add(1000,10000,30,3)
+levels.add(1000,10000,5)
+levels.add(2200,18000,30)
+levels.add(2200,18000,5)
+levels.add(1500,5600,25)
+levels.add(1500,5600,10,1)
+levels.add(3000,0,20)
+levels.add(3000,15000,30,3)
+levels.add(2000,0,30,3)
+levels.add(800,0,30,1)
+levels.add(2000,0,30,3)
+levels.add(3000,-15000,30,3)
+levels.add(3000,0,30,3)
+levels.add(1000,0,10)
+levels.add(1700,0,10)
+levels.add(1400,0,10,4)
+levels.add(1700,2000,10,4)
+levels.add(1400,0,10)
+levels.add(1700,-2000,10,4)
+levels.add(1000,0,10)
+levels.add(1000,0,10)
+levels.add(1100,16000,80)
+levels.add(1100,16000,20,1)
+levels.add(1100,0,80)
+levels.add(4000,0,20)
+levels.add(800,0,5)
+levels.add(4000,0,20)
+levels.add(800,2700,7)
+levels.add(4000,2700,20)
+levels.add(800,0,9)
+levels.add(6000,0,20)
+levels.add(800,-2700,7)
+levels.add(4000,-2000,20)
+levels.add(800,0,9)
+levels.add(1000,600,40)
+levels.add(1800,0,50,4)
+
+levels.finish()
+end
+
+--TODO: at least 4 more levels
+
+--smoothly move to a point
+--I don't know the proper name for this, but it's dead useful
+function target(n,tgt,time)
+	return (n+tgt*time)/(time+1)
+end
+
+--smoothly move the camera
+camera.target=function(tgt)
+	camera.x=target(camera.x,tgt,4)
+end
+
+--get2D -- convert a 3D point to a 2D one
+--returns 3 values -- x,y, and scale
+camera.get2D = function(x,y,z)
+	local rx,ry,rs
+	local tz=z/camera.fov
+	if (tz<camera.near) then
+		return -32,-32,0.5
+	end
+	rx=(x-camera.x)/z+camera.cx
+	ry=(y-camera.y)/z+camera.cy
+	rs=1/tz
+	return rx,ry,rs
+end
+
+--particle handling
+--particles are tiny and don't get sorted and only show up every other frame
+particles={}
+particles.init=function()
+	particles.max=64
+	for ii=1,particles.max do
+		particles[ii]={active=0,x=0,y=0,z=0,r=0,g=0,b=0}
+	end
+end
+--half the particles get drawn each frame
+particles.draw=function()
+	local odd=0
+	if flip > 0 then odd=1 end
+	for ii=1+odd,particles.max,2 do
+		local rx,ry,rs
+		rx,ry,rs=camera.get2D(particles[ii].x, particles[ii].y, particles[ii].z)
+		squ(rx,ry,rs, particles[ii].r, particles[ii].g,particles[ii].b)
+	end
+end
+particles.update=function()
+	for ii=1,particles.max do
+		if particles[ii].active==1 then
+			particles[ii].z=particles[ii].z-player.speed-0.3
+			if particles[ii].z/camera.fov < camera.near then
+				particles[ii].active=0
+			end
+		end
+	end
+end
+
+particles.addDirect=function(x,y,z,r,g,b)
+	for ii=1,particles.max do
+		if particles[ii].active==0 then
+			particles[ii].active=1
+			particles[ii].x=x
+			particles[ii].y=y
+			particles[ii].z=z
+			particles[ii].r=r
+			particles[ii].g=g
+			particles[ii].b=b
+			return
+		end
+	end
+end
+particles.add=function(x,y,lo,hi)
+	particles.addDirect(x+player.x,y,200, math.random(lo,hi),math.random(lo,hi),math.random(lo,hi))
+end
+--object handling
+--or, at the very least, the road barriers
+objects={}
+objects.init=function()
+	objects.odd=-1
+	objects.max=36
+	for ii=1,objects.max do
+		objects[ii]={active=0, tx=0,ty=0, x=0,y=0,z=0, width=0, passed=false, odd=0}
+	end
+end
+--move objects forward to the player, the player gets to stay still
+objects.update=function()
+	table.sort(objects,objects.cmp)
+	--local inactive_count=0
+	for ii=1,objects.max do
+		if objects[ii].active==1 then
+			objects[ii].z=objects[ii].z-player.speed
+			if objects[ii].z/camera.fov < camera.near then
+				objects[ii].active=0
+			end
+			if objects[ii].z < player.z and objects[ii].passed==false then
+				--deal with score
+				
+				player.score_gain_last=player.score_gain
+				player.score_gain=math.max(0, 1000-math.abs(player.x-objects[ii].x)//3)
+				if player.score_gain > 950 then player.score_gain=990 end
+				player.score=player.score+player.score_gain
+				--what surface are we on?
+				player.status=objects[ii].flag
+				--checkpoint
+				if objects[ii].flag==1 then
+					player.time=player.time + time_bonuses[speed_class].time
+					clock_big=60
+				end
+				--fix a nasty corner case that made the player go out-of-bounds early (better to add slop than take away space)
+				if objects[ii-1] and not objects[ii-1].passed then
+					player.offset2=objects[ii-1].x
+					player.width2=objects[ii-1].width
+				else
+					player.offset2=objects[ii].x
+					player.width2=objects[ii].width
+				end
+				player.offset=objects[ii].x
+				player.width=objects[ii].width
+				objects[ii].passed=true
+			end
+		--else
+		--	inactive_count=inactive_count+1
+		end
+	end
+	--print(inactive_count)
+end
+
+--draw the side-barriers
+--this feels like it should be slow, but there really isn't ever that much on screen
+objects.draw=function()
+	--table.sort(objects,objects.cmp)
+	for ii=1,objects.max do
+		if objects[ii].active==1 then
+			local rx,ry,rs
+			--draw left side
+			rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y,objects[ii].z)
+			spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
+			rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y+500*flip,objects[ii].z)
+			squ(rx,ry,rs,177,62,83)
+			--draw right side
+			rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y, objects[ii].z)
+			spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
+			rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y+500*(-flip), objects[ii].z)
+			squ(rx,ry,rs,56,183,100)
+			--draw middle
+			if objects[ii].odd<0 then
+				rx,ry,rs=camera.get2D(objects[ii].x, objects[ii].y+1000,objects[ii].z)
+				squ(rx,ry,rs,159,128,73)
+			end
+			--overhead signs, etc
+			if objects[ii].flag ~=0 and objects[ii].odd>0 then
+				rx,ry,rs=camera.get2D(objects[ii].x, objects[ii].y-3000, objects[ii].z)
+				spr(rx,ry,rs*9,objects[ii].tx,objects[ii].ty)
+			end
+		end
+	end
+end
+--add objects
+--we basically check that if the object z is less than the player's, and the player hasn't passed another object, then slow the player down heavily if they're out-of-bounds
+-- x is how far off the center we shift, width is how wide the road is
+objects.add=function(offset, width, flag)
+	if not flag then flag=0 end
+	for ii=1,objects.max do
+		if objects[ii].active==0 then
+			objects[ii].active=1
+			objects[ii].x=offset
+			objects[ii].y=200
+			objects[ii].z=200
+			objects[ii].width=width
+			objects[ii].passed=false
+			objects[ii].tx=1
+			objects[ii].ty=0
+			objects[ii].odd=objects.odd
+			objects.odd=-objects.odd
+			objects[ii].flag=flag
+			--object types:
+			--checkpoints
+			if flag==1 then objects[ii].tx=3 end
+			--goal
+			if flag==2 then objects[ii].tx=2 end
+			--ice (no x-friction, slow turning speed)
+			if flag==3 then
+				objects[ii].tx=1
+				objects[ii].ty=1
+			end
+			--magnet (pull player toward sides)
+			if flag==4 then
+				objects[ii].tx=2
+				objects[ii].ty=1
+			end
+			--slow (force player speed to drop, eg before very hard corners)
+			if flag==5 then
+				objects[ii].tx=3
+				objects[ii].ty=1
+			end
+			return
+		end
+	end
+end
+--used for sorting
+objects.cmp=function(a,b)
+	if a.z > b.z then return true end
+	return false
+end
+--handle the player
+player={}
+player.init=function()
+	player.status=0 --what surface are we driving on?
+	player.oob=false -- are we out of bounds?
+	player.oobtimer=0
+	player.time=start_times[speed_class].time*60 --time remaining
+	player.runtime=0 --play time
+	player.score=0 --added a score system for a somewhat different chalenge than gotta-go-fast
+	player.score_gain=0 --how much did you earn?
+	player.score_gain_last=0 --how much did you earn?
+	player.x=0 --horizontal position
+	player.xd=0 --horizontal movement speed
+	player.xmax_normal=200 --max horizontal speed under normal conditions
+	player.xmax_ice=270 --max horizontal speed on ice
+	player.xmax=player.xmax_normal --current max horizontal speed
+	player.xmaxslow=160 --max horizontal speed when out of bounds
+	player.xdspeed_normal=10 --normal turning speed
+	player.xdspeed_ice=13 --turning speed on ice
+	player.xdspeed=player.xdspeed_normal --current turning speed
+	player.xdfriction_normal=6 --normal horizontal friction
+	player.xdfriction_ice=2.5 --horizontal friction on ice
+	player.xdfriction=player.xdfriction_normal --current horizontal friction
+	player.z=8 --position in the world (this doesn't change, the world moves toward the player)
+	player.speed=3 --movement speed (stages are done with a rolling start)
+	--max speed
+	--TODO: move to sc table
+	--TODO: this is a mess and has remnants from a much earlier revision of the game
+	player.maxspeed_normal=makeSpeedTable()
+	player.maxspeed_normal[1]=2.8
+	player.maxspeed_normal[2]=3.3
+	player.maxspeed_normal[3]=4
+	player.maxspeed_normal[4]=4.75
+	player.maxspeed_normal[5]=5.5
+	player.maxspeed=player.maxspeed_normal
+	player.speedaccel=sc[speed_class].accel --how fast to accelerate
+	player.speedfriction=0.03 --how fast to slow down
+	player.speedslow=0.25
+	--out-of-bounds conditions:
+	--when the player passes a side-barrier (or rather, when a side-barrier passes the player), these get updated
+	--we use two of them because of an issue where the player would get caught way too early when turning into an expanding road
+	--TODO: do these need to be defined here in the player object?
+	player.offset=0
+	player.width=4000
+	player.offset2=0
+	player.width2=4000
+	player.counter=0 --when this hits the required number, the next barrier is created
+	player.countertop=10 --distance to the next barrier
+end
+--handle player movement
+player.update=function()
+	--reset normal constants
+	player.xdspeed=player.xdspeed_normal
+	player.xdfriction=player.xdfriction_normal
+	player.xmax=player.xmax_normal
+	player.maxspeed=player.maxspeed_normal[speed_class]
+	--finish line!
+	if player.status==2 then
+		gmode.set(gmode.stage_clear)
+		return
+	end
+	--ice
+	if player.status==3 then
+		player.xdspeed=player.xdspeed_ice
+		player.xdfriction=player.xdfriction_ice
+		player.xmax=player.xmax_ice
+		player.maxspeed=player.maxspeed+0.32
+	end
+	--slow
+	--TODO: different slow values based on speed class?
+	--or maybe just a fixed ratio based on max speed
+	if player.status==5 then
+		if player.speed>2.8 then player.speed=2.8 end
+	end
+	
+	--adjust xdspeed based on speed a bit
+	player.xdspeed=player.xdspeed*(2+player.speed/4)/3
+	if player.speed < 2 then
+		player.xdspeed=player.xdspeed*(1+player.speed)/3
+	end
+	
+	--player speed control
+	--accelerate
+	--we accelerate at the very start of the stage so if you aren't holding the gas at the beginning, your time isn't immediately ruined
+	if key(key_a)>0 or player.runtime < 60 then 
+		player.speed=player.speed+player.speedaccel
+	else
+		player.speed=player.speed-player.speedfriction
+	end
+	--braking
+	--TODO: adjust based on speedclass -- lower classes don't need such strong brakes
+	if key(key_b)>0 then
+		player.speed=player.speed-0.15
+	end
+	--limit horizontal speed
+	if player.xd > player.xmax then player.xd=player.xmax end
+	if player.xd < -player.xmax then player.xd=-player.xmax end
+	
+	--player movement
+	if key(key_left)>0 then --go left
+		player.xd=player.xd-player.xdspeed
+	elseif key(key_right)>0 then --go right
+		player.xd=player.xd+player.xdspeed
+	else --friction
+		if player.xd > player.xdfriction then
+			player.xd=player.xd-player.xdfriction
+		elseif player.xd < -player.xdfriction then
+			player.xd=player.xd+player.xdfriction
+		else
+			player.xd=0
+		end
+	end
+	
+	--check for out of bounds
+	local left_barrier, right_barrier, left_barrier2, right_barrier2
+	player.oob=false
+	left_barrier=player.offset-player.width-280
+	right_barrier=player.offset+player.width+280
+	left_barrier2=player.offset2-player.width2-280
+	right_barrier2=player.offset2+player.width2+280
+	if (player.x < left_barrier or player.x > right_barrier) and (player.x < left_barrier2 or player.x > right_barrier2) then
+		player.oob=true
+		--cap forward speed
+		if player.speed >2 then player.speed=2 end
+		if player.speed>1 then
+			player.speed=player.speed-player.speedslow
+		end
+		--penalize player
+		player.time=player.time-3
+		player.score=player.score-100
+		player.score_gain=player.score_gain-100
+		--limit horizontal speed
+		if player.xd > player.xmaxslow then player.xd=player.xmaxslow end
+		if player.xd < -player.xmaxslow then player.xd=-player.xmaxslow end
+	end
+	
+	--magnet
+	--this is in an odd place because it needs to know oob status
+	if player.status==4 and player.speed > 0.6 and not player.oob then
+		local magnet_pull=4.2
+		if (player.x > player.offset+magnet_pull and player.xd<100) then
+			player.xd=player.xd+magnet_pull
+		elseif (player.x < player.offset-magnet_pull and player.xd>-100) then
+			player.xd=player.xd-magnet_pull
+		end
+	end
+	
+	--player friction
+	if player.speed < 0 then player.speed=0 end
+	if player.speed > player.maxspeed then player.speed=player.maxspeed end
+	player.counter=player.counter+player.speed --actually move
+	player.x=player.x+player.xd
+	camera.target(player.x) --smoothly interpolate the camera
+	--subtract the timers
+	player.time=player.time-1
+	player.runtime=player.runtime+1
+	--game over
+	if (player.time < 0) then
+		gmode.set(gmode.time_over)
+		return
+	end
+	
+	--score is always ticking down
+	player.score=player.score-10
+	player.score_gain=player.score_gain-10
+	if player.score<0 then player.score=0 end
+	
+	--makes testing easier
+	if astro_burst_debug then
+		player.time=60*20
+	end
+end
+
+--draw the player
+--TODO: kinda should see if I can nudge this somewhere in the object drawing routine so it's z-ordered properly instead of always in front of objects
+player.draw = function()
+	local rx,ry,rs=camera.get2D(player.x,0,player.z)
+	local anim=0
+	if (t%7 >5) then anim=1 end
+	spr(rx,ry,rs,0,anim)
+end
+
+--reset most things
+function init_most()
+	moon.init()
+	camera.init()
+	objects.init()
+	player.init()
+	particles.init()
+	stars.init()
+	t=0
+	flip=1;
+	clock_big=0
+end
+
+--reset the whole game
+function init()	
+	gmode.init()
+	levels.init()
+	init_most()
+end
+
+--the moon/planet/satellite in the background
+moon={}
+moon.init=function()
+	moon.ty=math.random(0,1) --pick a sprite
+	moon.s=math.random(250,360)/100 --each race takes place somewhere random in space, so have different sized objects
+end
+--the moon is always actually pretty close here, so give it some (exaggerated) parallax
+moon.draw=function()
+	local rx,ry,rs=camera.get2D(-200000,-100000,6000)
+	spr(rx,ry,moon.s,4,moon.ty)
+end
+
+--game mode stuff
+gmode={}
+gmode.title={}
+gmode.time_over={}
+gmode.ingame={}
+gmode.pause={}
+gmode.stage_select={}
+gmode.stage_clear={}
+--resets the game to the title
+gmode.init=function()
+	gmode.current=gmode.title
+end
+--change game mode and do initialization
+gmode.set=function(m)
+	gmode.current=m
+	gmode.current.init()
+end
+--change game mode, no init (used for stuff like pausing)
+gmode.swap=function(m)
+	gmode.current=m
+end
+
+--clears the screen, updates based on game mode
+function step()
+	cls(sc[speed_class].bg.r, sc[speed_class].bg.g, sc[speed_class].bg.b)
+	gmode.current.step()
+	t=t+1
+	flip=-flip
+end
+
+--title screen
+gmode.title.init=function()
+	player.init()
+	camera.init()
+	objects.init()
+	particles.init()
+	stars.init()
+	t=0
+end
+gmode.title.step=function()
+	if key(key_start)==1 then
+		gmode.set(gmode.stage_select)
+		return
+	end
+	if flip>0 then
+		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+	end
+	if t%10==0 then
+		objects.add(0,3000,0)
+	end
+	objects.update()
+	stars.draw()
+	moon.draw()
+	player.speed=1
+	objects.draw()
+	particles.update()
+	particles.draw()
+	rect(0,0,16,16,255,255,255) --fixes a weird glitch with the text, I need to look into what's happening, could be the result of SDL2's software scaling being a bit bugged with clipping around the edges
+	text("astro-burst astro-burst astro-burst astro-burst ",-15*12-((t//4)%(16*12)),0,2,0)
+	text("2020 B.M.Deeal\n-beta version-",0,16,1,1)
+	if t%60 > 12 then
+		text("[press start button]",(view_width-20*8)/2,view_height-12,1,2+flip)
+	end
+end
+
+--draw the disqualification clock
+function draw_clock(flash)
+	--clock scales based on how much of the current second has elapsed
+	local clock_scale=math.max(math.max((player.time%60)/60*2.8,2),clock_big/60*3.5)
+	--flash clock when time is low, don't flash while we're picking up checkpoint time
+	local low_time=0
+	if flash or (player.time < 9*60 and player.time%50>=25 and clock_big<10) then
+		low_time=1
+	end
+	--shrink clock from an external source (basically just checkpoints)
+	if clock_big > 0 then clock_big=clock_big-1 end
+	--draw the clock and underlying text
+	text(string.format("%02d", player.time//60),view_width/2-8*clock_scale,0,clock_scale,1-low_time)
+	--the underlying text additionally warns you when time is VERY low
+	local timestr="time"
+	if player.time<60*5 and player.time>0 and t%40>=20 then timestr="low!" end
+	text(timestr,view_width/2-8*clock_scale,8*clock_scale,clock_scale/2,3)
+end
+
+gmode.ingame.init=function()
+	init_most()
+end
+
+--game loop
+gmode.ingame.step=function()
+	local this=gmode.ingame
+	--a burst of particles, even when not moving
+	if (t%100 < 4) then
+		particles.add(math.random(-2000,2000), math.random(-2000,2000), 32,96)
+	end
+	--if the player has advanced far enough forward, generate a new part of the level
+	if player.counter > player.countertop then
+		particles.add(math.random(-4000,4000), math.random(-3000,3000), 8,48)
+		--TODO: this is honestly kinda ugly and should get looked at
+		local ww,oo,ff=levels.get()
+		objects.add(oo,ww,ff)
+		player.counter=player.counter-player.countertop
+	end
+	
+	--update and draw
+	stars.draw()
+	moon.draw()
+	player.update()
+	objects.update()
+	particles.update()
+	objects.draw()
+	player.draw()
+	particles.draw()
+	
+	--hud stuff
+	--FPS display (TODO: move to a function?):
+	text("fps:"..math.floor(getfps()*100)/100,0,view_height-8,1,1)
+	--TODO: proper debug indicator setup
+	--text("x" .. player.x .. " speed" .. player.speed*10//1/10,0,8,1,1)
+	--text("i" .. levels.index.."\nw" .. player.width .. "\no"..player.offset .. "\n"..(t/60//60) .. ":" .. (t//60%60), 0,8,1,1)
+	--draw the lap time
+	text(timeToString(player.runtime),0,0,1,1)
+	--draw the score+score gain indicator
+	text(string.format("sc:%08d",player.score),view_width-8*11,0,1,1)
+	text(string.format("%+04d", player.score_gain_last), view_width-8*4,8,1,3)
+	draw_clock()
+	--draw player speed
+	local pspeed=string.format("%03d",player.speed*100//1)
+	text("spd",view_width-9*8,view_height-16,1,2+flip)
+	text(pspeed,view_width-6*8,view_height-16,2,2+flip)
+	
+	--draw out-of bounds text
+	if not oobt then oobt=0 end--dirty hack
+	--we show the oob stuff for a few frames after returning to the track
+	if player.oob then
+		player.oobtimer=20
+	end
+	if player.oobtimer>0 then
+		oobt=oobt+1 --instead of using the game timer, we use an internal one that resets when in bounds
+		--the left side text flashes
+		local oobflash=0
+		if oobt%80<40 then
+			oobflash=1
+		end
+		--the right side text changes depending on time remaining
+		--also, it blinks
+		if oobt%25<15 then
+			local tcol=1
+			local tmsg="caution"
+			if player.time<60*10 then
+				tmsg="warning"
+			end
+			--message becomes white when in serious danger
+			if player.time<60*5 then
+				tmsg="danger!"
+				tcol=0
+			end
+			--draw right side message
+			text("(!) "..tmsg,view_width-8*11-16,44,1,tcol)
+		end
+		--draw left side message
+		text("out of\nbounds!", 16, 32, 2, oobflash)
+		player.oobtimer=player.oobtimer-1
+	else
+		--reset out-of-bounds running timer
+		oobt=0	
+	end
+	
+	--handle game pausing
+	if key(key_start)==1 then
+		gmode.set(gmode.pause)
+		return
+	end
+end
+
+--game pausing
+gmode.pause.quit=false
+gmode.pause.init=function()
+	gmode.pause.quit=false
+	gmode.pause.confirm=false
+end
+gmode.pause.step=function()
+	local this=gmode.pause
+	local txtoffset=28
+	--different background when quitting
+	if this.confirm then
+		cls(32,0,0)	
+	end
+	stars.draw()
+	moon.draw()
+	objects.draw()
+	player.draw()
+	particles.draw()
+	--lots of scrolling stuff
+	--doing this makes me think I should consider adding scrolling text directly to quig as a command
+	text("astro-burst astro-burst astro-burst astro-burst ", -8*12+(t%(8*12))+1,40-txtoffset-1,1,2)
+	text("astro-burst astro-burst astro-burst astro-burst ", -8*12+(t%(8*12)),40-txtoffset,1,3)
+	local sctxt="[pause] [pause] [pause] [pause] "
+	if this.confirm then
+		sctxt="[quit?] [quit?] [quit?] [quit?] "
+	end
+	text(sctxt, -(t%(8*8*3)),48-txtoffset,3,0)
+	--pause menu
+	local conftxt="press A-button to confirm"
+	text(conftxt, view_width-8*#conftxt+1,88-txtoffset-1,1,2)
+	text(conftxt, view_width-8*#conftxt,88-txtoffset,1,3)
+	--if gmode.pause.quit then quit_txt="(Y)n " end
+	local sctxt2="quit?   "
+	if this.confirm then
+		sctxt2="sure?   "
+	end
+	text(sctxt2,view_width-7*16-4,72-txtoffset,2,1)
+	text("no",view_width-3*8,72-txtoffset,1,1)
+	text("yes",view_width-3*8,72-txtoffset+8,1,1)
+	local sel_offset=0
+	if gmode.pause.quit then sel_offset=8 end
+	if not gmode.pause.arrowx then gmode.pause.arrowx=0 end
+	if t%30 == 10 then gmode.pause.arrowx=-10 end
+	gmode.pause.arrowx=target(0,gmode.pause.arrowx,7)
+	text(">",view_width-4*8+gmode.pause.arrowx,72-txtoffset+sel_offset,1,1)
+	if key(key_down)==1 then
+		gmode.pause.quit=true
+	end
+	if key(key_up)==1 then
+		gmode.pause.quit=false
+	end
+	--handle exit
+	if key(key_start)==1 or key(key_a)==1 then
+		if this.confirm then --handle exit confirmation
+			if this.quit then
+				gmode.set(gmode.title)
+			else
+				this.confirm=false
+			end
+		else --normal pause
+			if this.quit then
+				this.confirm=true
+			else
+				gmode.swap(gmode.ingame)
+			end
+		end
+		this.quit=false
+	end
+end
+
+--out of time, game over
+gmode.time_over.init=function()
+	log_score()
+	for ii=1,particles.max do
+		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+	end
+	player.time=0
+end
+
+--this is in a function because there used to be more than one when designing the time over screen
+function timeover_bar(y,scale,speed,mode)
+	local twidth=8*13*scale
+	text("time over... time over... time over... time over... time over...",-twidth-((t*speed)%twidth),y,scale,mode)
+end
+
+gmode.time_over.step=function()
+	cls(8,8,16)
+	if player.speed<0.1 then player.speed=-0.1 end
+	player.xd=0
+	camera.target(player.x)
+	objects.update()
+	objects.draw()
+	player.draw()
+	particles.update()
+	particles.draw()
+	player.time=0
+	local flash=false
+	if t % 60 > 30 then flash=true end 
+	draw_clock(flash)
+	timeover_bar((view_height-8*3)/2,3,1,1)
+	text("press start button...",0,view_height-8,1,0)
+	text(string.format("final score: %08d",gmode.stage_clear.clear_score),0,view_height-16,1,2+flip)
+	if key(key_start)==1 then
+		gmode.set(gmode.title)
+		return
+	end
+end
+
+--log best score
+--TODO: this should set a flag indicating if this run had the best score or not
+function log_score()
+	gmode.stage_clear.clear_score=player.score --the score ends up getting updated after the goal so let's pretend that doesn't happen
+	if (not best_scores[speed_class][gmode.stage_select.selection]) or gmode.stage_clear.clear_score > best_scores[speed_class][gmode.stage_select.selection] then
+		best_scores[speed_class][gmode.stage_select.selection] = gmode.stage_clear.clear_score
+	end
+end
+
+--log best time
+function log_time()
+	if (not best_times[speed_class][gmode.stage_select.selection]) or player.runtime < best_times[speed_class][gmode.stage_select.selection] then
+		best_times[speed_class][gmode.stage_select.selection] = player.runtime
+	end
+end
+
+forward_adjust=0
+gmode.stage_clear.clear_score=0
+gmode.stage_clear.init=function()
+	forward_adjust=0 --scrolling
+	log_time()
+	log_score()
+end
+
+gmode.stage_clear.step=function()
+	--force the player into the goal area
+	local hmove=20
+	if player.x > player.offset+1 or player.x < player.offset-1 then
+		player.x=(player.offset+player.x*hmove)/(hmove+1)
+	end
+	--continue tracking the player
+	camera.target(player.x)
+	--slow the player down
+	if player.speed > 3 then player.speed=3 end
+	player.speed=player.speed-0.03
+	if player.speed<0 then player.speed=0 end
+	--background
+	stars.draw()
+	moon.draw()
+	--victory particles
+	if flip>0 then
+		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+	end
+	--particles not drawn over everything anymore -- this is deliberate
+	particles.draw()
+	particles.update()
+	--draw the road, player
+	objects.update()
+	objects.draw()
+	player.draw()
+	--draw player clear time
+	local txt_scale=2.5+math.sin(t/40)*0.5
+	if t%40>10 then
+		text(timeToString(player.runtime), 0,0,2,1)
+	end
+	--big stage clear banner, with a rectangle for the background
+	local scx, scy
+	scx=0-(t*txt_scale*0.8)%(8*13*txt_scale)
+	scy=(view_height-40)
+	rect(0,scy+2,view_width,7*txt_scale,0,0,0)
+	--text("stage clear! stage clear! stage clear! stage clear! ",scx+4,scy+4,txt_scale,2)
+	text("stage clear! stage clear! stage clear! stage clear! ",scx,scy,txt_scale,3)
+	--best time
+	local bt_text=""
+	if player.runtime == best_times[speed_class][gmode.stage_select.selection] then
+		bt_text="new "
+	end
+	text(bt_text .. "best:" .. timeToString(best_times[speed_class][gmode.stage_select.selection]), 0,16,1,1)
+	--current score
+	text(string.format("c.sc:%08d", gmode.stage_clear.clear_score), 0,24,1,1)
+	--best score
+	local hs_text=""
+	--TODO: this keeps showing "new" even if you have an identical score/time, fix that
+	if gmode.stage_clear.clear_score == best_scores[speed_class][gmode.stage_select.selection] then
+		hs_text="new "
+	end
+	text(string.format(hs_text.."best:%08d", best_scores[speed_class][gmode.stage_select.selection]), 0,32,1,0)
+	--return to title
+	text("[press start button]",view_width-20*8,view_height-8,1,0)
+	if key(key_start)==1 then
+		gmode.set(gmode.title)
+		return
+	end
+end
+
+--stage select screen stuff
+gmode.stage_select.selection=1 --what stage was picked
+gmode.stage_select.shift=0 --location of the selected stage text
+gmode.stage_select.classgrow=1 --how much to scale the speed class text (visual indication when selecting it)
+--set up a few things
+gmode.stage_select.init=function()
+	local this=gmode.stage_select
+	init_most()
+	this.shift=view_width
+	gmode.stage_select.classgrow=1
+	--particles.init()
+end
+--update stage select screen
+gmode.stage_select.step=function()
+	local this=gmode.stage_select
+	--looked a bit plain without them
+	--no moon
+	stars.draw()
+	
+	--show some particles (these are a nice visual indication of the current speed class)
+	if flip>0 then
+		particles.add(math.random(-12000,12000), math.random(-6000,6000), 32,96)
+	end
+	player.speed=speed_class
+	particles.update()
+	particles.draw()
+	
+	--top text
+	text("stage", view_width-8*5-6*16,0 ,1, 0)
+	text("select", view_width-6*16,0 ,2, 1)
+	
+	--draw which speed class we're on
+	local scpx, scpy, scpw, scph --holds the positions for the speed class text
+	scpw=#sc[speed_class].name*8 * this.classgrow --width
+	scph=8*this.classgrow --height
+	scpx=view_width-scpw --x-pos
+	scpy=(view_height+32)/2-scph-3 --y-pos
+	--this is a dirty hack around a quig text scaling bug where gaps appear in the filled background text modes that will eventually get fixed... but it isn't fixed right now
+	rect(scpx,scpy,scpw+1,scph+1,255,255,255)
+	--draw the selected speed class
+	text(sc[speed_class].name, scpx,scpy,this.classgrow,0)
+	--automatically shrink the speed class text
+	if this.classgrow > 1 then
+		this.classgrow=this.classgrow-0.125
+	end
+	if this.classgrow<1 then --bounds check
+		this.classgrow=1
+	end
+	
+	--pick speed class
+	if key(key_up)==1 then --slower
+		if speed_class > 1 then
+			speed_class=speed_class-1
+			this.classgrow=2
+		else --animate less if we're already at the end of the list
+			this.classgrow=1.5
+		end
+	elseif key(key_down)==1 then --faster
+		if speed_class < 5 then
+			speed_class=speed_class+1
+			this.classgrow=2
+		else
+			this.classgrow=1.5
+		end
+	end
+	
+	--pick stage, have it slide in
+	if key(key_left)==1 then
+		this.selection= this.selection-1
+		this.shift=view_width
+	end
+	if key(key_right)==1 then
+		this.selection= this.selection+1
+		this.shift=view_width
+	end
+	
+	--clamp stages
+	local stages=5 --TODO: this should probably be specified elsewhere
+	if this.selection<1 then this.selection=stages end
+	if this.selection>stages then this.selection=1 end
+	
+	--show best score if it exists
+	if best_scores[speed_class][this.selection] then
+		local bsstr = "best score:" .. math.floor(best_scores[speed_class][this.selection])
+		text(bsstr,1,(view_height+32)/2-3-16-1,1,2)
+		text(bsstr,0,(view_height+32)/2-3-16,1,3)
+	end
+	
+	--show best time if it exists
+	local btstr=""
+	if best_times[speed_class][this.selection] then
+		btstr = "best time:" .. timeToString(best_times[speed_class][this.selection])
+	else
+		btstr = "not yet cleared..."
+	end
+	text(btstr,1,(view_height+32)/2-3-8-1,1,2)
+	text(btstr,0,(view_height+32)/2-3-8,1,3)
+	--divider line
+	rect(0,(view_height+32)/2-3,view_width,3,255,255,255)
+	--selected stage
+	text(""..this.selection.."/"..stages, this.shift, (view_height+32)/2,4,0)
+	--control description (TODO: this could look nicer)
+	text("left/right: select stage\nup/down: select speed\npress A-button to start",2,view_height-24+2,1,2)
+	text("left/right: select stage\nup/down: select speed\npress A-button to start",0,view_height-24,1,3)
+	--slide in the selected stage
+	this.shift=target(0, this.shift, 6)
+	--select a stage
+	if key(key_a)==1 then
+		levels.create[this.selection]()
+		gmode.set(gmode.ingame)
+		return
+	end
+	--TODO: this is only for testing
+	--debug stage
+	if key(key_start)==1 then
+		this.selection=0
+		levels.create[this.selection]()
+		gmode.set(gmode.ingame)
+		return
+	end
+	--return to title
+	if key(key_b)==1 then
+		gmode.set(gmode.title)
+		return
+	end
+end

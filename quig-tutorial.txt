@@ -1,0 +1,67 @@
+quig simple game tutorial: dodge-em-up
+
+---
+
+-about-
+This tutorial is meant to cover most parts about making a whole game with quig.
+To keep things simple, this tutorial uses only colored squares, not needing you to provide sprites.
+This tutorial assumes a basic working knowledge of Lua. The language is rather easy to pick up, but this tutorial doesn't explain it in any real depth.
+This tutorial also assumes you've completed the basic "catch the dot" tutorial.
+
+The resulting game is fairly simple. The player is tasked with dodging enemy shots for as long as they can. However, getting close to enemy fire without getting hit is a good thing, allowing the player to get more points. Holding the A or B button will slow the player's movement down for fine-control, and holding both buttons will slow the player down even more.
+
+We'll start off by setting up a framework for game states. From there, we'll be setting up player and enemy objects. After that, we'll get the player and enemy on the screen, create up a system for handling enemy bullets, and handle the player getting hit.
+Lastly, we'll handle the remaining polish -- things like scoring, a title screen, and a game over screen.
+
+---
+
+-getting started-
+
+Anything between [code start] and [code end] is game code, rather than descriptive text. Don't include [code start] or [code end] in your quig file!
+
+Like in the catch-the-dot tutorial, you'll want to copy blank.quig and blank.png. Here, we're naming the copies as dodge-tutorial.quig and dodge-tutorial.png respectively.
+
+
+dodge-tutorial.quig should have two functions in them already, like this:
+[code start]
+
+function init()
+end
+function step()
+end
+
+[code end]
+
+We could just start putting stuff on screen right now, but expanding the game will be a hassle if we just do that.
+The game will have various game states, such as the title screen, when the player is in the game, when the player has paused, and when the player has lost. 
+
+In my games for quig, I use a table containing the various game states, like so:
+[code start]
+gs={} --table which holds all the game states
+gs.ingame={} --main game state
+gs.current=gs.ingame --what state are we running?
+
+gs.ingame.init=function()
+	--any initialization for entering the game goes here
+end
+gs.ingame.step=function()
+	--what happens each frame during the main game
+end
+[code end]
+
+There are a lot of ways you can structure your game code, but this is the method I have used for most of the various example games.
+At this point, nothing is happening yet. In fact, we aren't even using the game states yet.
+
+Let's make a few changes to the mandatory quig init and step functions, like so:
+
+[code start]
+function init()
+	gs.current.init()
+end
+function step()
+	gs.current.step()
+end
+[code end]
+
+We now have a pretty basic framework that we can easily expand upon.
+Again, nothing is happening. 

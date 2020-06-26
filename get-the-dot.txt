@@ -1,0 +1,537 @@
+quig game tutorial: get-the-dot!
+by B.M.Deeal
+
+---
+
+-about-
+This tutorial is meant to cover the very basics of making a game with quig. This tutorial is set up for you, the reader, to get going with quig very quickly, showing you how to make a game.
+
+To keep things simple, this tutorial uses only colored squares, not needing you to provide sprites.
+This tutorial assumes a basic understanding of programming, and ideally a basic understanding of Lua. If you are entirely unfamiliar with Lua, you might want to go look up a tutorial on using it. It isn't difficult, but it is somewhat different from other common programming languages.
+
+The game we will be making is pretty simple:
+The player is tasked with picking up a randomly positioned dot on the screen. Every time the player picks up the dot, it teleports somewhere else, giving the player some points in the process. The amount of points the player will get from picking it up is based on the amount of time remaining. If the time reaches zero, the game restarts.
+
+The D-pad moves the player. The A and B buttons allow the player to move faster, as long as they have any boost available.
+Pressing Start will pause and unpause the game.
+
+Very simple, right? Let's go.
+
+---
+
+-getting started-
+
+Anything between [code start] and [code end] is game code, rather than descriptive text. Remember: don't include [code start] or [code end] in your quig file!
+
+The easiest way to get started is to copy blank.quig and blank.png from the examples folder and rename them to gtd.quig and gtd.png, respectively.
+
+After doing this, gtd.quig should have two functions in them already, like as follows:
+[code start]
+function init()
+end
+function step()
+end
+[code end]
+
+First, let's handle the player. We'll use a Lua table to store information about the player, along with a few functions about it.
+
+[code start]
+--player control
+player={}
+player.best_score=0
+player.last_score=0
+player.init=function()
+	--center the player on the screen
+	player.x=view_width/2
+	player.y=view_height/2+12 --the 12 is to accomodate the 24px tall score area
+	--reset the score
+	player.score=0
+	--player movement variables
+	player.maxspeed_normal=1
+	player.maxspeed_boost=2
+	player.maxspeed=player.maxspeed_normal
+	player.boost=60*2.5
+end
+[code end]
+
+We've initialized some variables outside of the player.init() function because they don't reset when the whole game does.
+
+We set up some variables controlling how the player moves, too. The player moves one pixel per frame in each direction normally, and moves two pixels a frame when boosting.
+
+The player can boost for 2.5 seconds. quig runs at a fixed 60hz rate, so we multiply the time in seconds by 60.
+
+If we run the code now, not only does nothing really happen, but the player object isn't initialized fully. We never ran the player.init() function. Let's add that to init() now, as follows:
+
+[code start]
+function init()
+	player.init()
+end
+[code end]
+
+Still nothing on screen. Let's get the player drawn.
+
+First, let's add a function to draw the player, a simple white rectangle.
+In a basic game like this, it might seem like overkill since the player is just a plain rectangle, but as your game expands, you want your code cleanly delineated into different functions.
+
+[code start]
+--the player is just a plain white rectangle
+player.draw=function()
+	squ(player.x, player.y, 1, 255,255,255)
+end
+[code end]
+
+When drawing the player, we use the squ() function, which takes six parameters:
+	* x - how far from the left to draw the square
+	* y - how far from the top draw the square
+	* scale -how big is the square
+	* the three primary color components, from 0 to 255:
+		* r - red
+		* g - green
+		* b - blue
+
+quig makes its squares the same size as a sprite, 16x16 pixels. The scale determines how much larger to make the square (eg, putting in 2.5 would make a 40x40 square). 
+In addition, squares (and sprites) in quig are centered around their x/y position.
+
+Now that we can draw the player... nothing is on screen yet. We still haven't done anything after initializing the player object.
+
+To change that, let's update the screen in the step function.
+
+[code start]
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	player.draw()
+end
+[code end]
+
+Run the game now and... there's a white square on screen. It's entirely stationary though, since we still need to handle player input. 
+
+Getting the player to move isn't too hard though, we just need to change player.x and player.y based on what keys on the controller they're pressing.
+
+Add this player.update() function:
+
+[code start]
+--what does the player do every frame?
+player.update=function()
+	--reset normal speed
+	player.maxspeed=player.maxspeed_normal
+	--set boost speed if we have any boost
+	if (key(key_a)>0 or key(key_b)>0) and player.boost>0 then
+		player.boost=player.boost-1
+		player.maxspeed=player.maxspeed_boost
+	end
+	--control player movement
+	if key(key_up)>0 then
+		player.y=player.y-player.maxspeed
+	end
+	if key(key_down)>0
+		then player.y=player.y+player.maxspeed
+	end
+	if key(key_left)>0
+		then player.x=player.x-player.maxspeed
+	end
+	if key(key_right)>0
+		then player.x=player.x+player.maxspeed
+	end
+	--keep the player in bounds
+	--the player is 16x16, and the position is centered, so we have 8px on each side to account for
+	--the top bar is 24px tall, so the playable area is a little smaller than the full screen
+	if player.x<8 then --left
+		player.x=8
+	end
+	if player.y<32 then --top
+		player.y=32
+	end
+	if player.x>view_width-8 then --right
+		player.x=view_width-8
+	end
+	if player.y>view_height-8 then --bottom
+		player.y=view_height-8
+	end
+end
+[code end]
+
+In addition, we'll need to actually put this in the step() function for it to run:
+
+[code start]
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	player.draw()
+	player.update()
+end
+[code end]
+
+
+This is a lot of code all at once, but it's pretty self explanatory.
+At the start, we reset how fast the player can go.
+After that, we check to see if the player is using up the boost. If they have boost and are pressing the A/B-buttons, they boost.
+
+From there, we use the current player max speed combined with what direction the player wants to move to move the player around.
+Once the player moves, we have to keep the player on screen. We save some space on each side since the player's x/y position needs to account for the size of the square.
+
+During all of this, we introduce the key() function.
+It takes just one argument, what key is being pressed.
+
+See, quig pretends it's always hooked up to a controller with the following layout:
+[d-pad  start  a b]
+
+Thus, the available keys are:
+D-pad:
+	* key_up
+	* key_down
+	* key_left
+	* key_right
+buttons:
+	* key_a
+	* key_b
+	* key_start
+
+On an Xinput controller, A and B are exactly that, A and B. In addition, X and Y act as B and A respectively. Start is the menu button, to the right of the guide button.
+
+quig uses SDL's controller API, which is designed to try and make all controllers fit into the same sort of layout as an Xinput device. It supports some normal "Dinput" (HID) controllers, and tries to map the buttons as best as it can, mostly based on physical positioning, but the button names might be different (for example, the iBuffalo SNES/SFC style controller 
+quig doesn't support a lot of non-Xinput controllers as a result.
+As of this writing, quig doesn't use the analog stick at all on a controller. This will eventually be fixed.
+
+On a keyboard, the keys Z, S, Q, and 2 act as the A-button. For the B-button, keys X, A, W, and 1 are used. Enter is the start button, and the arrow keys act as the D-pad.
+
+Games for quig should use the terms "A-button", "B-button", "start button", and "D-pad" to refer to the controls, rather than referring to keyboard keys.
+
+The key() function returns a number based on how long the key is pressed. It returns 0 if the key isn't pressed, and after that, it returns a value based on how long the key has been pressed. You generally want to check if it's equal to 0, equal to 1, or greater than 0.
+
+quig currently doesn't return any larger values than 2 to check how long a key has been held, but will in the future. 
+
+If you run the game now, the player moves and can run around briefly with the boost button.
+There still isn't much of a game yet, so let's add the dot that the player has to get.
+
+[code start]
+--dot control
+dot={}
+
+--making the dot do cool stuff like move around and bounce off the walls is left as an exercise for the reader
+dot.init=function()
+	--score bonus
+	dot.bonusmax=60*5 --quig runs at 60hz, so you get five seconds to catch the dot at the start of the game
+	dot.bonus=dot.bonusmax
+	--put the dot somewhere
+	dot.teleport()
+end
+[code end]
+
+Also, because we have a dot.init(), that should go into the main init() function:
+
+[code start]
+function init()
+	player.init()
+	dot.init()
+end
+[code end]
+
+So, we've made a table to hold the dot's position and functions, just like with the player.
+dot.init() positions the dot via dot.teleport(), and sets up some variables related to how score and time are handled.
+Since we don't have dot.teleport(), let's write it:
+
+[code start]
+--move the dot around
+--this is mathematically unsound (it's possible mathematically to get a long string of clustered numbers that just fit in where the player is)
+--but a computer RNG that clustered its values like that would be severely suspect, so we blithely check forever
+--TODO (for the reader): make this more fair on the player -- you can get a string of far left, far right, far left, etc spawns and the player can't do anything whatsoever if they've already used their boost up
+dot.teleport=function()
+	--ensure that the dot never lands exactly on the player
+	repeat
+		--move the dot around
+		dot.x=math.random(4,view_width-4)
+		dot.y=math.random(4+24,view_height-4) --we leave some space at the top for the status bar
+	until not dot.collide()
+end
+[code end]
+
+dot.teleport() randomly positions the dot on the screen, checking in a loop to make sure it doesn't immediately land on the player.
+There are many improvements that could be made to the function, as indicated by the comments.
+This tutorial leaves any additional tweaks to make the game more fun or playable to the reader.
+
+It uses a dot.collide() function to make sure the player doesn't immediately pick it up, so let's write that:
+
+[code start]
+--reposition the dot
+dot.collide=function()
+	return squcol(dot.x,dot.y,0.5, player.x,player.y,1)
+end
+[code end]
+
+dot.collide() checks if the player and the dot are touching.
+It uses the squcol() function for this, which checks six parameters:
+	* the x position of the first square
+	* the y position of the first square
+	* the scale of the first square (remember, squares in quig are 16x16 at scale 1)
+	* the x position of the second square
+	* the y position of the second square
+	* the scale of the second square
+If the two squares overlap, squcol() returns true, false otherwise.
+Here, we use the position and scale of the player and dot.
+
+The dot doesn't do anything yet, so let's have it react to things with dot.update():
+
+[code start]
+dot.update=function()
+	--check collision
+	if dot.collide() then
+		--move the dot around
+		dot.teleport()
+		--player bonuses
+		player.score=player.score+dot.bonus
+		player.boost=player.boost+3
+		--decrease the bonus/time
+		--we also try to keep the time from getting TOO short, although it is possible for it to be impossible to reach the dot still
+		--fixing this while keeping the game challenging is left as an exercise for the reader
+		if dot.bonusmax > 60*2.5 then
+			dot.bonusmax=dot.bonusmax-5
+		end
+		--reset the bonus
+		dot.bonus=dot.bonusmax
+	end
+end
+[code end]
+
+This function simply checks if the player has picked up the dot. If so, it moves the dot around, gives the player their score, and in addition, makes the game harder by subtracting how large their remaining bonus is with every dot picked up.
+There are a few additional functions we'll need before any of this really matters.
+
+We need a function to draw the dot, which looks a lot like the code needed to draw the player...
+[code start]
+dot.draw=function()
+	squ(dot.x,dot.y,0.5, 255,255,0)
+end
+[code end]
+
+Also, step() needs to be updated.
+[code start]
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	--update everything in the game
+	player.update()
+	dot.update()	
+	--object drawing
+	dot.draw()
+	player.draw()
+end
+[code end]
+
+With this, the game should be done, right? The player exists, the dot exists, and you can run around, collecting dots. That's it, yeah?
+
+There's still more. For starters, there isn't much game. The score isn't shown. The score bonus doesn't tick down. There's a little bit of polish that's missing too. Apart from the major issues, the game is missing a lot of small things like a title screen and pausing.
+
+Let's draw the player information. Score, time, boost.
+
+[code start]
+--draw the information bar
+function topbar()
+	rect(0,0,view_width,24,192,192,192) --top bar background
+	text(string.format("score:%07d\n best:%07d\n last:%07d", player.score, player.best_score, player.last_score),0,0,1,2) --score information
+	text(string.format("+%03d", dot.bonus),view_width-16*4,0,2,2) --bonus/timer, in big text because it's the most important thing
+	text(string.format("boost:%03d", player.boost), view_width-8*9,16,1,2) --how much boost can the player use
+end
+[code end]
+
+The function is short, but there's quite a bit to explain.
+
+We draw a gray background bar with quig's rect() function.
+rect() is a bit different compared to squ():
+	* x - how far from the left the top-left of the rectangle is
+	* y - how far from the top the top-left of the rectangle is
+	* width - how wide the rectangle is, in pixels
+	* height - how tall the rectangle is, in pixels
+	* the three primary color components, from 0 to 255:
+		* r - red
+		* g - green
+		* b - blue
+
+squ() is mainly intended for game objects and particles, so its position is centered for convenience (in particular, it means that objects don't need to be repositioned when scaled). In contrast, rect() is a more general-purpose drawing function, and doesn't have a specific scale factor to deal with.
+
+After drawing the bar, we use quig's text() and Lua's string.format() functions to display the information.
+
+text() takes five parameters:
+	* txt - the text to display
+	* x - how far from the left the top-left of the text is
+	* y - how far from the top the top-left of the text is
+	* scale - how big to resize the text (the font in quig is 8x8, so a scale of 2 would result in 16x16 characters)
+	* mode - how to display the text.
+
+There are 4 options for the mode parameter:
+	* 0 - black on white
+	* 1 - white on black
+	* 2 - black on transparent
+	* 3 - white on transparent
+
+string.format() is fairly complicated, and I won't go into too much detail, but it takes a format string with format specifiers as blank spaces for other arguments to fill in.
+Sounds confusing? Here are some examples that might clear things up a bit:
+
+mystr = string.format("lives: %d", 10) --mystr is set to "lives: 10"
+mystr = string.format("%04d", 20) --mystr is set to "0020", the leading 0 indicates to pad the number out with zeroes, and the 4 is how many characters need to be displayed
+mystr = string.format("score: %05d, best: %05d", 1234, 24210) --mystr is set to "score: 01234, best: 24210"
+
+See the pattern?
+
+The d is used for integer numbers. You can use f for dealing with floating point numbers too. 
+You might want to read a page on format specifiers for more details, such as <https://www.tutorialspoint.com/format-specifiers-in-c>. This page isn't for Lua specifically (it's for C), but Lua uses the same format specifiers.
+
+We go through the trouble of using string.format because it allows us to make the score display a fixed length. In our case, scores are always shown with have seven digits.
+
+We use view_width to position things like the amount of remaining boost and how much time is left relative to the right edge of the screen.
+
+To get this on the screen, put a call to topbar() in step().
+Our step() function should now look something like this:
+
+[code start]
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	--show the HUD
+	topbar()
+	--update everything in the game
+	player.update()
+	dot.update()	
+	--object drawing
+	dot.draw()
+	player.draw()
+end
+[code end]
+
+Now, you can see the score going up. The timer isn't counting down as time passes, though. 
+
+To fix that, we'll add another function that ticks everything down:
+
+[code start]
+function bonustiming()
+	--constantly tick down the bonus
+	dot.bonus=dot.bonus-1
+	--if the bonus runs out, the game is over
+	if dot.bonus<0 then
+		--remember the best score and the previous one between runs
+		player.last_score=player.score
+		if player.score > player.best_score then
+			player.best_score=player.score
+		end
+		--reset game
+		init()
+	end
+end
+[code end]
+
+Also, we'll need to edit step() again. Stick a call to bonustiming() at the end of it, like so:
+
+[code start]
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	--show the HUD
+	topbar()
+	--update everything in the game
+	player.update()
+	dot.update()	
+	--object drawing
+	dot.draw()
+	player.draw()
+	--count things down, handle if the game ends
+	bonustiming()
+end
+[code end]
+
+Now, the game should count down time, and even restart when time is up! We're done, yeah?
+Not quite, but we're very close. The base gameplay is done, but there's a little bit of polish missing.
+
+The game shouldn't just keep running when no one is at the controls. We need a title screen, and pausing.
+This tutorial combines the two somewhat, for brevity.
+
+For that, we need to know if a: the game is in a "paused" state, and if a game is in progress or not.
+
+Edit init() to look as follows:
+[code start]
+-re-initialize everything
+--this function is REQUIRED by quig
+--we also call it when the player loses
+function init()
+	--start the game paused
+	paused=true
+	--no game is running
+	game_over=true
+	--set up our objects
+	player.init()
+	dot.init()
+end
+[code end]
+
+Now, we need a function that handles what goes on when the game is paused:
+
+[code start]
+function pauseupdate()
+	--informative messages
+	text("press start to continue!",0,view_height-8,1,0)
+	--if there isnt' a game running, show the title screen
+	if game_over then
+		text("get-the-dot!", view_width/2-12*16/2, view_height/2-8,2,1)
+		text("game over!", 0,24,1,3)
+		text("controls:\n* D-pad: move\n* A/B-button: boost",48,88,1,3)
+	--otherwise, we're merely paused
+	else
+		dot.draw()
+		player.draw()
+		text("game paused!", view_width/2-4*12,view_height/2,1,1)
+	end
+	
+	--force the RNG to change based on how long the game is paused
+	--this is a bit of a dirty hack
+	math.random()
+end
+[code end]
+
+This function is pretty simple. It always shows the "press start" message, so the player knows how to return to the game.
+After that, it shows different messages based on whether there is a game running or not, showing either the game controls and the name of the game, or displaying a paused message on top of the player and the dot.
+
+The "dirty hack" where it just calls math.random() on its own basically changes the RNG based on how long the game is paused/on the title. quig will have a proper way to initialize the RNG at some point, but it doesn't right now.
+We can't just do the usual way of initializing the RNG in Lua using math.randomseed(os.time()), because quig doesn't support the os.* functions.
+
+It's a bit annoying that lua throws reading the system clock together with running arbitrary commands (like deltree and rm -rf and the lot).
+This workaround has one issue -- the very first dot position is constant on game startup, since init() calls dot.teleport(). Fixing this is left as an exercise for the reader.
+
+Now, a few modifications to step() need to be made to actually get this to work, and the game is complete. Or at least, completely playable.
+
+[code start]
+--main game loop
+function step()
+	cls(16,16,16) --clear the screen with a dark gray background
+	topbar()
+	--handle the game when it's stopped
+	--here, "paused" counts as both when the game isn't running and when the player pauses the game
+	--this is simple, but not the best way
+	if key(key_start)==1 then paused=not paused end --pause the game if we press start
+	if paused then
+		pauseupdate()
+		return
+	end
+	--if the game is running, then it can't be over
+	game_over=false
+	--update everything in the game
+	player.update()
+	dot.update()
+	--object drawing
+	dot.draw()
+	player.draw()
+	--count things down, handle if the game ends
+	bonustiming()
+end
+[code end]
+
+The new additions are pretty simple. When the player presses start, we toggle the paused flag. If paused is false, then not paused is true, and vice versa.
+
+If the game is paused, then the game jumps to the pause screen. In addition, it returns from step() early, so the game code doesn't run.
+
+After that, the other big addition is that we reset game_over if the game isn't paused.
+
+With that, the game is fully playable.
+
+There are still several issues with it. The biggest issue is that the player can (and will) get unlucky, having to run the full width of the screen back and forth, making the player use up all of their boost. 
+Try your hand at fixing this while still keeping things challenging. 
+
+In addition, the graphics are a little drab. Try drawing some sprites, and using the spr() function! Maybe add some detail to the background, mess with the colors, go wild!
+Make the game your own. The source of get-the-dot! is licensed under CC0, which means you can do anything you want with it.
+
+Hopefully, you're more comfortable with using quig and are ready to start working on your own games!
+
+--B.M.Deeal
+

@@ -1,0 +1,1216 @@
+-- pop.drop'n -- a simple 2D platform game where you bounce around and try and reach the end
+-- pop.drop'n is (C) 2020 B.M.Deeal. pop.drop'n is distributed under the GPLv3.
+
+-- This file expects word-wrapping and a tab width of 4.
+
+--[[
+	This program is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+    See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this program.
+    If not, see <https://www.gnu.org/licenses/>.
+--]]
+
+--[[
+	-about-
+	You are Drop'n, a young girl in a strange dreamland, soaring through the sky while trying to avoid nightmare hazards!
+	Get to the goal without falling out of the stage!
+	
+	-control-
+	The controls are:
+		[d-pad  start  a b]
+	* A/B-button -- jump
+	* Left/Right -- move
+	* Start -- pause
+
+	-how to play-
+	Move Drop'n through each stage without falling out of the level.
+	There are several types of objects and hazards:
+	* up bouncer: these launch you upward. Nothing more, nothing less. After hitting one of these (or most blue objects!), you'll regain your air-jump.
+	* side bouncer: these knock you in the direction they point. As yellow objects, they don't give out a jump, so be careful!
+	* balloon: these also bounce you, but they disappear after being hit!
+	* star: collect all the stars in the stage and maybe you'll get something cool? As a bonus, you regain your air-jump every time you collect them.
+	* enemy: these dream monsters want to knock you away! If you hit them while falling down, you'll bounce upwards and defeat them... but if you touch them while rising up, they'll expand like a puffer-fish, and you'll be sent flying backwards!
+	
+	After hitting most objects, and even when being hit by an enemy, you will regain an air-jump, marked by a trail of sparkling particles. If Drop'n cannot jump, no sparks will trail from her.
+
+	You have three lives, which are replenished at the start of every level. If you fall out of the level, you'll be returned to the last checkpoint that you've touched.
+	If you run out of lives, you'll have to start the game over!
+
+	TODO:
+	* shrink "dangerous" object hitboxes a bit (maybe add a hitsize parameter to objects?)
+	* more levels (8 stages, 3 rounds each)
+	* more objects
+	* more enemy actions (moving left/right, )
+	* goal
+	* scoring (handle this at the end of level -- basically, just do some kind of time+perfect bonus+bonus based on how few times you got hit)
+	* attract mode? heck, it could even explain the story and controls and the lot
+	* how to play screen (like on Neo Geo games, but hopefully a bit more useful)
+	* find all the other TODO items and clean them up
+--]]
+
+
+--TODO: any sort of color constants/generators should be part of this
+colors={}
+colors.star={r=200,g=170,b=120}
+colors.jump=function()
+	local range=60
+	local offset=128
+	return {
+		r=math.random(range)+offset,
+		g=math.random(range)+offset,
+		b=math.random(range)+offset
+	}
+end
+--viewport control
+camera={}
+camera.init=function()
+	camera.s=0 --how much to shake
+	camera.st=0 --how long are we shaking for
+	camera.x=0 --this gets updated with the player
+	camera.y=0 --this is just for screen shaking
+	camera.bound=view_width/3 --stages are almost strictly left-to-right, so we show more of what's ahead than what's behind
+end
+
+--track the player
+camera.updateplayer=function()
+	camera.update()
+	camera.x=camera.x+player.x-camera.bound
+end
+--update the camera, call this if you need camera features but there's no player
+camera.update=function()
+	camera.s=camera.s-camera.st
+	if camera.s<0 then camera.s=0 end
+	camera.x=floatrand(-camera.s,camera.s)
+	camera.y=floatrand(-camera.s,camera.s)
+end
+--shake screen (assuming things take into account camera position -- particles and objects do, anything manually drawn needs to be handled)
+camera.shake=function(amount,time)
+	camera.st=amount/time
+	camera.s=amount
+end
+
+--no-op action, used for objects
+function none(this)
+end
+
+--generate a floating point number from low to high
+--no idea why this isn't part of lua's math.* library
+function floatrand(low,high)
+	local range=high-low
+	local r=math.random()
+	return low+(r*range)
+end
+
+
+--sort two tables by their z position
+function zsort(a,b)
+	if a.z>b.z then return true end
+	return false
+end
+
+--clouds, positioned in 3D space
+--had them scaled properly in 3D space too, but it looked uglier than just integer scaling since they're always at the same scale
+clouds={}
+clouds.init=function()
+	clouds.max=7
+	local big=math.random(1,clouds.max)
+	for ii=1,clouds.max do
+		clouds[ii]={}
+		this=clouds[ii]
+		--some clouds are bigger
+		this.size=1
+		local yesbig=(ii+big)%clouds.max
+		if yesbig==1 or yesbig==2 then this.size=2 end
+		--position clouds on screen somewhere
+		this.x=math.random(view_width)
+		this.y=ii/clouds.max*view_height+math.random(-20,20)
+		this.z=floatrand(3,10)
+	end
+	--clouds are z-sorted
+	table.sort(clouds, zsort)
+end
+--move the clouds based on where the player is
+--TODO: should maybe refactor this to operate based on the camera position, so I can use the clouds other than in-level/do some hacky garbage with the player object
+clouds.update=function()
+	for ii=1,clouds.max do
+		this=clouds[ii]
+		--clouds scroll around, wrapped at the screen edges
+		--TODO: maybe generate a new Y position?
+		local wrap=16*this.size
+		this.x=this.x-(player.xd)/this.z --position in 3D
+		if this.x<-wrap then this.x=this.x+view_width+wrap*2 end
+		if this.x>view_width+wrap then this.x=this.x-view_width-wrap*2 end
+	end
+end
+--put some clouds on screen
+clouds.draw=function()
+	for ii=1,clouds.max do
+		this=clouds[ii]
+		spr(this.x, this.y, this.size,0,1)
+	end
+end
+
+--level handling
+levels={}
+levels[1]={}
+levels["extra"]={}
+
+levels.create={}
+levels.count=1
+--keeps track of the next place to put an item
+--takes the offset, y position, type, scale, and action
+levels.add=function(o,y,t,s,a)
+	levels.nextx=levels.nextx+o
+	objs.add(levels.nextx,y,t,s,a)
+	levels.warnc=levels.warnc+1
+end
+
+--the usual start for each stage
+levels.intro=function()
+	levels.warnc=2
+	levels.nextx=0
+	objs.add(-48,view_height-48,"bounce",2)
+	objs.add(-68,48,"right",3)
+	levels.add(0,view_height-48,"bounce",4)
+	levels.add(48,view_height-48,"bounce",2)
+end
+
+--fill the rest of the level up with stuff, for performance testing
+levels.stress=function()
+	for ii=1,objs.max do
+		local we=0
+		if ii%10==0 then we=1 end
+		levels.add(48,120,"bounce",2+we)
+	end
+end
+
+--goal
+--TODO: goal
+levels.ending=function()
+	levels.add(48,120,"bounce",2)
+	levels.add(48,120,"bounce",2)
+	levels.add(48,120,"bounce",2)
+	levels.add(48,120,"bounce",3)
+	print("items:"..levels.warnc)
+end
+
+
+--extra level
+levels["extra"].text="extra stage\nround 0"
+levels["extra"].next=""
+levels["extra"].create=function()
+	levels.intro()
+	---[[
+	levels.add(72, 80, "bounce", 1, hover)
+	levels.add(0, 100, "star")
+	levels.add(60, 40, "down", 2)
+	levels.add(0,120,"balloon")
+	levels.add(36, 80, "left", 2)
+	levels.add(36, 80, "bounce", 1, hover)
+	levels.add(50, 100, "star", 1, hovermild)
+	levels.add(50, 90, "star", 1, hovermild)
+	levels.add(60, 100, "balloon", 2)
+	levels.add(70, 80, "star", 1, hovermild)
+	levels.add(50, 60, "star", 1, hovermild)
+	levels.add(40, 100, "spike", 1, hovermild)
+	levels.add(60,120, "bounce", 2)
+	levels.add(20,80, "left", 2)
+	levels.add(50,80, "right", 2)
+	levels.add(60,60, "enemy1")
+	levels.add(0,120, "balloon")
+	levels.add(60,50, "enemy1")
+	levels.add(60,40, "enemy1")
+	levels.add(80,120, "bounce")
+	levels.add(0,30, "spike",2)
+	levels.add(100,32, "bounce")
+	levels.add(0,120, "spike",2)
+	levels.add(100,120, "bounce")
+	levels.add(0,30, "spike",2)
+	levels.add(60,30, "spike")
+	levels.add(40,30, "left")
+	levels.add(0,120, "spike",2)
+	levels.add(50,90, "bounce")
+	levels.add(30,100, "right")
+	levels.add(30,110, "right")
+	levels.add(30,120, "right")
+	levels.add(40,120,"bounce",2, hovermild)
+	levels.add(50,60,"enemy1")
+	levels.add(50,30,"enemy1")
+	levels.add(50,60,"enemy1")
+	levels.add(50,30,"enemy1")
+	--]]
+	levels.add(60,80, "bounce",1, hover)
+	levels.add(40,60,"left",3)
+	levels.add(0,100,"left",3)
+	levels.add(0,140,"left",3)
+	levels.add(60,130, "bounce",1, hover)
+	levels.add(60,60,"down",3)
+	levels.add(0,20,"left",3)
+	levels.add(60,80, "bounce",1, hover)
+	levels.add(0,120, "bounce",1, hovermild)
+	levels.add(40,60,"left",3)
+	levels.add(0,100,"left",3)
+	levels.add(0,140,"down",3)
+	levels.add(60,120, "bounce",1, hover)
+	levels.add(60,60,"left",3)
+	levels.add(0,20,"left",3)
+	levels.add(30,130,"bounce")
+	levels.add(30,120,"bounce")
+	levels.add(30,50,"enemy1")
+	levels.add(30,120,"bounce")
+	levels.add(30,50,"enemy1")
+	levels.add(30,50,"enemy1")
+	levels.add(45,20,"spike",2)
+	--TODO: more
+	levels.ending()
+end
+
+
+levels[1].text="stage 1\nround 1"
+--TODO: rework a bit (that wavy bit, despite being easy, is probably a bit overwhelming for so early in the level
+levels[1].create=function()
+	--intro segment
+	levels.intro()
+	--main level
+	
+	levels.add(48,30,"enemy1")
+	levels.add(48,80,"bounce",2)
+	levels.add(64,120,"bounce",2)
+	levels.add(48,70,"spike")
+	levels.add(0,30,"star")
+	levels.add(0,110,"star")
+	levels.add(64,120,"bounce",3)
+	levels.add(32,50,"enemy1")
+	
+	
+	levels.add(50,100,"balloon",2)
+	levels.add(70,100,"bounce")
+	levels.add(60,100,"balloon",2)
+	levels.add(70,100,"bounce")
+	levels.add(70,100,"balloon")
+	
+	levels.add(50,110, "bounce", 2)
+	levels.add(50,20, "right", 2)
+	levels.add(0,120, "balloon",2)
+	levels.add(50,80, "enemy1", 2)
+	levels.add(0,120, "bounce")
+	levels.add(50,20, "left", 2)
+	levels.add(50,110, "bounce", 2)
+	
+	
+	levels.add(70,120,"bounce",1,hover)
+	levels.add(35,120,"balloon")
+	levels.add(35,120,"bounce",2,hover)
+	levels.add(35,120,"balloon")
+	levels.add(35,120,"bounce",1,hover)
+	levels.add(0,50,"enemy1",1,hover)
+	levels.add(35,120,"balloon")
+	levels.add(35,120,"bounce",2,hover)
+	levels.add(35,120,"balloon")
+	levels.add(0,12,"star",1)
+	levels.add(35,120,"bounce",1,hover)
+	levels.add(60,70,"star")
+	levels.add(20,120,"bounce",2,hovermild)
+	levels.add(60,120,"balloon",2)
+	levels.add(40,48,"bounce",1,hovermild)
+	levels.add(20,90,"spike",2)
+	levels.add(60,120,"balloon",2)
+
+	--TODO: checkpoints, goal
+	levels.ending()
+	--levels.stress()
+end
+
+--player
+player={}
+player.lives=3 --when lives==0, game over
+player.init=function()
+	--position
+	player.x=0
+	player.y=0
+	--speed
+	player.xd=0
+	player.yd=0
+	--animation
+	player.anim=0
+	player.animrate=30
+	--physics
+	player.friction=0.05
+	player.gravity=0.1
+	player.xdmax=1.5 --TODO: some way for other objects to force the player to go fast
+	player.ydmax=3
+	player.xmove=0.1
+	--lock the player's controls (eg, damaging items)
+	player.ctrl_lock=0
+	--can the player jump?
+	player.jump=true
+	--number of stars picked up
+	player.stars=0
+	--restart position
+	player.xcheck=0
+	player.ycheck=0
+end
+--generate single particles for jump related stuff (also, balloons)
+function jumpburst(x,y,mul)
+	if not mul then mul=1 end
+	par.add(x, y, floatrand(-0.4,0.4)*mul, floatrand(-0.4,0.4)*mul, floatrand(0.2,0.6),12,colors.jump())
+end
+
+--convert hue, saturation, and value into an rgb table
+--this uses a formula I saw on rapidtables.com
+--it's nice how Lua allows for a rather direct transcription of the formula
+--h is an angle in degrees (0..360), s and v are 0..1 range
+function hsv2rgb(h,s,v)
+	if not s then s=1 end
+	if not v then v=1 end
+	local c=v*s
+	local x=c*(1-math.abs((h/60)%2-1))
+	local m=v-c
+	local rr,gg,bb
+	h=h%360
+	s=math.min(s,1)
+	v=math.min(v,1)
+	if h>=0 and h<60 then
+		rr,gg,bb=c,x,0
+	elseif h>=60 and h<120 then
+		rr,gg,bb=x,c,0
+	elseif h>=120 and h<180 then
+		rr,gg,bb=0,c,x
+	elseif h>=180 and h<240 then
+		rr,gg,bb=0,x,c
+	elseif h>=240 and h<300 then
+		rr,gg,bb=x,0,c
+	elseif h>=300 and h<360 then
+		rr,gg,bb=c,0,x
+	end
+	return {r=(rr+m)*255, g=(gg+m)*255, b=(bb+m)*255}
+end
+
+
+--create a two-layered explosion
+function explode(x,y,mul,count, color)
+	if not mul then mul=1 end
+	if not count then count=1 end
+	for ii=1,count do
+		local explodecolor
+		if not color then
+			explodecolor=hsv2rgb(math.random(60)-10, 0.6,0.9)
+		else
+			explodecolor=color
+		end
+		--[[
+		{
+			r=math.random(72,255),
+			g=math.random(32,255),
+			b=math.random(32,192)
+		}
+		--]]
+		local range=200
+		local offset=50
+		local ang=math.rad(ii/count*360)
+		local xd=math.sin(ang)*floatrand(1,2)
+		local yd=math.cos(ang)*floatrand(1,2)
+		par.add(x, y, xd*mul,yd*mul,floatrand(0.4,1),10, explodecolor)
+		par.add(x, y, xd*mul/2,yd*mul/2,floatrand(0.4,1),10, explodecolor)
+	end
+end
+
+--handle player control and things like that
+player.update=function()
+	--if you get hit, you get sent flying back and can't just keep pushing ahead, allow movement only if that isn't true
+	if player.ctrl_lock <= 0 then
+		--movement
+		if key(key_right)>0 then
+			player.xd=player.xd+player.xmove
+		elseif key(key_left)>0 then
+			player.xd=player.xd-player.xmove
+		else
+			--friction
+			if player.xd > 0 then
+				player.xd=player.xd-player.friction
+				if player.xd <=player.friction then
+					player.xd=0
+				end
+			end
+			if player.xd < 0 then
+				player.xd=player.xd+player.friction
+				if player.xd >=player.friction then
+					player.xd=0
+				end
+			end
+		end
+	else
+		--count down the control lock timer
+		player.ctrl_lock=player.ctrl_lock-1
+	end
+	
+	--jump (you can still jump when controls locked)
+	if player.jump then
+		if key(key_a)==1 or key(key_b)==1 then
+			local jumpheight=2.5
+			player.yd=math.min(-jumpheight, player.yd-jumpheight)
+			player.jump=false
+			for ii=1,18 do
+				jumpburst(player.x,player.y,3)
+			end
+		end
+		--show jump indicator
+		--if the player is sparkling, then Drop'n can jump
+		if t%4==0 then
+			jumpburst(player.x,player.y)
+		end
+	end	
+	--speed limits, gravity
+	if player.xd > player.xdmax then player.xd=player.xdmax end
+	if player.xd < -player.xdmax then player.xd=-player.xdmax end 
+	player.yd=player.yd+player.gravity
+	if player.yd<-player.ydmax then player.yd=-player.ydmax end
+	if player.yd>player.ydmax then player.yd=player.ydmax end
+	player.x=player.x+player.xd
+	player.y=player.y+player.yd
+	--animation
+	player.anim=(0.25+player.anim+player.xd) % player.animrate
+	--print(player.xd, player.yd)
+	--death
+	if player.y > view_height+64 then
+		gs.set(gs.death)
+		return
+	end
+end
+
+--draw the player, off screen indicator, handle animation
+player.draw=function()
+	--off-screen indicator
+	if (player.y<camera.y) and flip<0 then
+		spr(player.x-camera.x,-camera.y-player.y,1,3,1)
+	end
+	--update animation
+	local anim=0
+	if player.anim>=player.animrate/2 then anim=1 end
+	--draw player
+	if not (player.ctrl_lock > 0 and t%5 ~= 2) then --flash during control lock
+		spr(player.x-camera.x,player.y-camera.y,1,3-anim,0)
+	end
+end
+
+--objects
+objs={}
+objs.max=255 --arbitrary limit, could be done away with
+
+--is the object on screen?
+--objects that do anything other than just sit there might move onto the screen, so we treat them as always being on screen anyway
+--TODO: should we give moving objects a different version of this?
+objs.checkonscreen=function(this)
+	local scale=this.s*this.sc*16
+	if this.on and (this.showalways or (this.x+scale >= camera.x and this.x-scale <= camera.x+view_width)) then
+		return true
+	end
+	return false
+end
+--set up object table
+objs.init=function()
+	for ii=1,objs.max do
+		objs[ii]={
+			--position, movement
+			x=0,
+			y=0,
+			xd=0,
+			yd=0,
+			--scale
+			s=1,
+			sc=1, --drawn size is s*sc
+			--active? y/n
+			on=false,
+			--object kind, what to do each frame
+			type=0,
+			action=none,
+			--sprite
+			tx=0,
+			ty=0,
+			--what function to use to check if this is visible?
+			visible=objs.checkonscreen
+		}
+	end
+end
+--draw each object
+--todo: only draw what's on screen
+objs.draw=function()
+	for ii=1,objs.max do
+		local this=objs[ii]
+		local scale=this.s*this.sc*16
+		if this:visible() then
+			spr(objs[ii].x-camera.x, objs[ii].y-camera.y, this.s*this.sc, objs[ii].tx, objs[ii].ty)
+		end
+	end
+end
+
+--spike objects get to flash
+--this probably should just check a global animation timer instead of doing a mod for each object
+--TODO: refactor this into the colors table
+spikecolor={
+	{r=255,g=205,b=117},
+	{r=239,g=125,b=87},
+	{r=177,g=62,b=83}
+}
+
+--update event for spikes
+--again, we probably should put this on a global animation timer but eh
+function spikeflash(this)
+	if t%6>=3 then
+		this.ty=0
+		par.add(this.x,this.y, floatrand(-0.75,0.75),floatrand(-2,1),floatrand(0.25,0.65),5,spikecolor[math.random(3)])
+	else
+		this.ty=1
+	end
+end
+
+function downflash(this)
+	if t%6>=3 then
+		this.ty=1
+		par.add(this.x,this.y, floatrand(-0.75,0.75),floatrand(-2,1),floatrand(0.25,0.65),5,spikecolor[math.random(3)])
+	else
+		this.ty=2
+	end
+end
+
+--have objects float
+function hover(this)
+	if not this.hovery then this.hovery=this.y end
+	this.y=this.hovery+math.sin((this.x+t)/30)*12
+end
+--have objects only float a little
+--TODO: could probably make this a per-object setting? maybe?
+function hovermild(this)
+	if not this.hovery then this.hovery=this.y end
+	this.y=this.hovery+math.sin((this.x+t)/50)*6
+end
+
+--handle star glittering/animation
+function star(this)
+	local time=14
+	if t%time > time/2 then
+		this.tx=1
+	else
+		this.tx=0
+	end
+	if t%20==0 then
+		par.add(this.x,this.y, floatrand(-0.3,0.3), floatrand(-0.3,0.3), 0.3,10, {r=255, g=255, b=255})
+	end
+end
+
+--add a new object if there's space in the table
+objs.add=function(nx,ny,ntype,ns,naction)
+	--default scale
+	if not ns then ns=1 end
+	--default action (nothing)
+	if not naction then naction=none end
+	--look for a free object slot, add new object
+	for ii=1,objs.max do
+		local this=objs[ii]
+		--open slot
+		if not this.on then
+			this.hovery=false
+			this.on=true
+			this.x=nx
+			this.y=ny
+			this.type=ntype
+			this.action=none
+			this.s=ns
+			this.sc=1 --scale coefficient on top of normal scale
+			--decode object types
+			--bouncers
+			if ntype=="bounce" then
+				this.tx=6
+				this.ty=0
+			elseif ntype=="right" then
+				this.tx=6
+				this.ty=1
+			elseif ntype=="left" then
+				this.tx=6
+				this.ty=2
+			elseif ntype=="balloon" then
+				this.tx=5
+				this.ty=0
+				this.action=hovermild
+			--simple enemy
+			elseif ntype=="enemy1" then
+				this.tx=4
+				this.ty=0
+				this.action=hover --TODO: this clobbers naction
+			elseif ntype=="spike" then
+				this.tx=7
+				this.ty=1
+				this.action=spikeflash
+			elseif ntype=="star" then
+				this.tx=0
+				this.ty=3
+				this.action=star
+			elseif ntype=="down" then
+				this.tx=5
+				this.ty=1
+				this.action=downflash
+			end
+			if naction~=none then
+				this.action=naction
+			end
+			return
+		end
+	end
+end
+--update each object
+objs.update=function()
+	for ii=1,objs.max do
+		local this=objs[ii]
+		--todo: on-screen check
+		if this:visible() then
+			this.action(this)
+			this.x=this.x+this.xd
+			this.y=this.y+this.yd
+			this.sc=this.sc-0.03
+			if this.sc<1 then this.sc=1 end
+			--collisions
+			--objects check if the player hit them, since it's just a many->one relation, objects don't interact with each other really
+			if squcol(player.x,player.y,1, this.x,this.y,this.s) then
+				local dojump=true --most objects replenish jumps, specify if to not bother by setting this to false
+				this.sc=1.5
+				if this.type=="bounce" then
+					player.yd=-2.5
+				elseif this.type=="right" then --TODO: refactor
+					--knock right, and also knock away based on where you are
+					player.xd=2
+					if player.y>this.y then
+						player.yd=2
+					elseif player.y<this.y then
+						player.yd=-1
+					end
+					dojump=false
+				elseif this.type=="left" then
+					player.xd=-2
+					if player.y>this.y then
+						player.yd=2
+					elseif player.y<this.y then
+						player.yd=-1
+					end
+					dojump=false
+				elseif this.type=="balloon" then
+					--pop and bounce player
+					this.on=false
+					player.yd=-2.5
+					for nn=1,12 do
+						jumpburst(this.x,this.y,3)
+					end
+				elseif this.type=="star" then
+					--semi-rare pickups, try and collect them all!
+					this.on=false
+					player.stars=player.stars+1
+					explode(this.x,this.y, 1, 6, colors.star)
+				elseif this.type=="enemy1" then
+					--explode on hit, period
+					--TODO: refactor to function
+					explode(this.x,this.y,2,15)
+					if player.yd>-0.1 then -- smashed it!
+						this.on=false
+						camera.shake(4,30)
+						player.yd=-3
+					else --oops
+						this.sc=3					
+						camera.shake(6,40)
+						player.ctrl_lock=40
+						player.xd=-2
+						if player.yd>-1 then
+							player.yd=player.yd-0.2
+						end
+					end
+				elseif this.type=="spike" then
+					--get spiked horribly towards the ground
+					dojump=false
+					player.ctrl_lock=20
+					player.xd=-2
+					if this.sc<2 then
+						explode(this.x,this.y,2,6)
+					end
+					this.sc=3					
+					camera.shake(6,40)
+					if player.yd<1 then player.yd=1 end
+				elseif this.type=="down" then
+					--get slammed to the ground, stunning you for a good bit, almost certainly knocking you out of bounds
+					dojump=false
+					player.ctrl_lock=50
+					player.xd=0
+					player.yd=4
+					if this.sc<3 then
+						explode(this.x,this.y,2,8)
+					end
+					this.sc=4		
+					camera.shake(8,50)
+				end
+				--replenish jump
+				if dojump then
+					player.jump=true
+				end
+			end --collision check
+		end --visible y/n check
+	end --object loop
+end
+
+--background system
+--it lets you do quick'n'dirty gradients
+bg={}
+bg.normal=function()
+	bg.r=10
+	bg.g=12
+	bg.b=30
+	bg.rd=0.8 
+	bg.gd=0.8 
+	bg.bd=1.25
+end
+bg.quit=function()
+	bg.r=40
+	bg.g=12
+	bg.b=0
+	bg.rd=-0.8 
+	bg.gd=-0.8 
+	bg.bd=0.1
+end
+bg.pause=function()
+	bg.r=64
+	bg.g=64
+	bg.b=64
+	bg.rd=-2
+	bg.gd=-2
+	bg.bd=-2
+end
+bg.init=function()
+	bg.normal()
+	bg.count=36
+end
+--draw a gradient out of rectangles
+bg.draw=function()
+	local rr,gg,bb= bg.r, bg.g, bg.b
+	for ii=0,bg.count-1 do
+		local ysize=view_height/bg.count --height of each strip
+		local ypos=ii*ysize -- where each strip goes
+		--calculate the colors, draw
+		--todo: refactor into a clamp function
+		rr=rr+bg.rd
+		rr=math.max(0,rr)
+		rr=math.min(255,rr)
+		gg=gg+bg.gd
+		gg=math.max(0,gg)
+		gg=math.min(255,gg)
+		bb=bb+bg.bd
+		bb=math.max(0,bb)
+		bb=math.min(255,bb)
+		rect(0,ypos,view_width,ysize+1,rr,gg,bb)
+	end
+end
+
+--game states
+gs={}
+gs.title={}
+gs.ingame={}
+gs.death={}
+gs.paused={}
+gs.blank={}
+gs.titlecard={}
+gs.current=gs.title
+gs.ingame.level="extra"
+--change the game state (initializing everything)
+gs.set=function(n)
+	gs.current=n
+	gs.current.init()
+end
+--change the game state (but don't reinitialize, for things like pausing)
+gs.swap=function(n)
+	gs.current=n
+end
+--change the game state, with a few frames of blank screen in between
+gs.setblank=function(n,tt)
+	if not tt then tt=20 end
+	gs.current=gs.blank
+	gs.blank.n=n
+	gs.blank.timer=tt
+end
+
+gs.blank.step=function()
+	local this=gs.blank
+	if this.timer<0 then
+		gs.set(this.n)
+		return
+	end
+	this.timer=this.timer-1
+end
+
+--"death"
+--don't use swap to set the death state! use set!
+gs.death.init=function()
+	local this=gs.death
+	player.lives=player.lives-1
+	this.timermax=82
+	if player.lives <= 0 then
+		this.timermax=this.timermax*3
+	end
+	this.timer=this.timermax
+end
+--show the player's death, and either a: go back to the title if out of lives or b: start the stage over
+gs.death.step=function()
+	if player.lives <=0 then
+		cls(0,0,0)
+	end
+	local this=gs.death
+	if this.timer < 0 then
+		par.init()
+		if player.lives > 0 then
+			--TODO: this will have to change when multiple levels are added maybe
+			gs.setblank(gs.ingame)
+		else
+			gs.setblank(gs.title,45)
+		end
+		return
+	end
+	this.timer=this.timer-1
+	clouds.draw()
+	objs.update()
+	objs.draw()
+	for ii=1,2 do
+		par.add(player.x+floatrand(-12,12),view_height, floatrand(-0.25,0.25),floatrand(-1,-7), math.max(0,(this.timer-30)/this.timermax),30, colors.jump())
+	end
+	par.update()
+	par.draw()
+	if player.lives <=0 then
+		outlinetext("dream over", view_width/2-10*8, view_height/2-8, 2)
+	end
+end
+
+--particle system
+par={}
+par.max_frame=48 --how many are on screen at once
+par.max=par.max_frame*2 --every other particle is shown/calculated each frame, so we get to have twice as many
+par.init=function()
+	for ii=1,par.max do
+		par[ii]={
+			on=false,
+			--scale
+			s=1,
+			--color
+			r=255,
+			g=255,
+			b=255,
+			--position, speed
+			x=0,
+			y=0,
+			xd=0,
+			yd=0,
+			--lifespan in frames
+			l=60
+		}
+	end
+end
+
+--update visible particles
+par.update=function()
+	for ii=(1+t%2),par.max,2 do
+		--a particle exists if it hasn't shrunken out of existence
+		if par[ii].s > 0 then
+			--shrink speed
+			par[ii].s= par[ii].s-1/(par[ii].l*2)
+			--movement
+			par[ii].x= par[ii].x + par[ii].xd*2
+			par[ii].y= par[ii].y + par[ii].yd*2
+			--disappear
+			if par[ii].s<=0 then par[ii].on= false end
+			--out of bounds (with some wiggle room)
+			local size=32+16*par[ii].s
+			if par[ii].x-camera.x<-size or par[ii].x-camera.x>view_width+size or par[ii].y-camera.y<-size or par[ii].y-camera.y>view_height+size then
+				par[ii].on=false
+			end
+		end
+	end
+end
+
+
+gs.titlecard.init=function()
+
+end
+--use this to start a title card
+--TODO: a lot of this could be handled fairly differently, like getting the text from the level itself, which would require a bit of a (needed) rework of the level framework
+gs.titlecard.set=function(txt, level)
+	this=gs.titlecard
+	this.text=levels[gs.ingame.level].text
+	this.timer=60*2
+	gs.setblank(this,10)
+end
+
+gs.titlecard.step=function()
+	text("get ready! get ready! get ready! get ready! ", (t%(16*11))-16*11,view_height-16,2,0)
+	spr(view_width*3/4,view_height/2,3,0,0)
+	text(this.text,view_width/5,view_height/2-8,1,3)
+	this.timer=this.timer-1
+	if this.timer<0 then
+		gs.setblank(gs.ingame,10)
+	end
+end
+
+--draw particles, but only half of them each frame
+par.draw=function()
+	for ii=(1+t%2),par.max,2 do
+		if par[ii].on then
+			squ(par[ii].x-camera.x, par[ii].y-camera.y, par[ii].s, par[ii].r, par[ii].g, par[ii].b)
+		end
+	end
+end
+
+--add a particle
+--color is a table with r,g,b values, like {r=255,g=128,b=0}
+--if it's not there, we just make up a color at random
+par.add=function(nx,ny,speedx,speedy,scale,life,color)
+	if not speedy then speedy=speedx end
+	if not scale then scale=1 end
+	if not life then life=60 end
+	if not color then
+		color={}
+		--[[
+		color.r=math.random(128,255)
+		color.g=math.random(64,192)
+		color.b=math.random(48,128)
+		--]]
+		color.b=math.random(80,128)
+		color.g=math.random(60,96)
+		color.r=math.random(24,64)
+	end
+	--look for an open slot
+	for ii=1,par.max do
+		if not par[ii].on then
+			par[ii].x=nx
+			par[ii].y=ny
+			par[ii].r=color.r
+			par[ii].g=color.g
+			par[ii].b=color.b
+			par[ii].xd=speedx
+			par[ii].yd=speedy
+			par[ii].s=scale
+			par[ii].l=life/scale
+			par[ii].on=true
+			return
+		end
+	end
+end
+
+
+--explicity reset background settings since paused doesn't have a .init()
+gs.paused.reset=function()
+	gs.paused.option=0 --0: continue, 1: quit
+	gs.paused.yes_scl=0
+	gs.paused.no_scl=2
+	gs.paused.confirm=false
+end
+gs.paused.step=function()
+	local pp=gs.paused
+	--dim background
+	--TODO: should actually change the background properly
+	--keep drawing everything
+	if not pp.confirm then
+		clouds.draw()
+		objs.draw()
+		player.draw()
+		par.draw()
+		bg.pause()
+	else
+		bg.quit()
+	end
+	--paused logo
+	local lscl=2
+	local lpx=lscl*16
+	spr((lpx/2)+4,view_height-(lpx/2)-2,lscl,0,2) --left side
+	spr((lpx/2)+4+lpx,view_height-(lpx/2)-2,lscl,1,2) --right side
+	--quit menu
+	if pp.confirm then
+		outlinetext("are you sure?",view_width/2-13*4,view_height/2-4,1)
+	else
+		outlinetext("end game?",view_width/2-9*4,view_height/2-4,1)
+	end
+	local sc_spd=0.3
+	local no_s, yes_s = 0,0
+	local tsin=math.sin(t/15)/2
+	--shrink/grow based on selection
+	if pp.option==0 then
+		yes_s=tsin
+		pp.no_scl=pp.no_scl+sc_spd
+		if pp.no_scl>2 then pp.no_scl=2 end
+	else
+		pp.no_scl=pp.no_scl-sc_spd
+		if pp.no_scl<0 then pp.no_scl=0 end
+	end
+	if pp.option==1 then
+		no_s=tsin
+		pp.yes_scl=pp.yes_scl+sc_spd
+		if pp.yes_scl>2 then pp.yes_scl=2 end
+	else
+		pp.yes_scl=pp.yes_scl-sc_spd
+		if pp.yes_scl<0 then pp.yes_scl=0 end
+	end
+	spr(view_width/2,view_height/2-45, 1 + pp.yes_scl+no_s, 3,2)
+	spr(view_width/2,view_height/2+45, 1 + pp.no_scl+yes_s,4,2)
+	--inputs
+	if key(key_down)==1 then pp.option=0 end
+	if key(key_up)==1 then pp.option=1 end
+	--selection menu
+	if key(key_start)==1 or key(key_a)==1 then
+		if pp.confirm then
+			if pp.option==0 then
+				pp.confirm=false
+			elseif pp.option==1 then
+				bg.normal()
+				gs.set(gs.title)
+			end
+		else
+			if pp.option==0 then
+				bg.normal()
+				gs.swap(gs.ingame)
+			elseif pp.option==1 then
+				pp.confirm=true
+			end
+		end
+		pp.option=0
+	end
+	--game logo
+	if pp.confirm then
+		spr(view_width-22,18,2,2,2)
+	else
+		spr(view_width-22,18,2,0,0)
+	end
+end
+
+gs.ingame.init=function()
+	this=gs.ingame
+	camera.init()
+	objs.init()
+	--TODO: level select or password option or something
+	levels[this.level].create()
+	clouds.init()
+	player.init()
+	gs.paused.reset()
+	par.init()
+	t=0
+end
+
+--draw text with an outline
+--VERY wasteful (pixels can and will be overdrawn five times), but easy
+function outlinetext(str,x,y,s)
+	text(str,x+1,y,s,2)
+	text(str,x-1,y,s,2)
+	text(str,x,y+1,s,2)
+	text(str,x,y-1,s,2)
+	text(str,x,y,s,3)
+end
+
+--draw hud
+--TODO: time, score
+function drawhud()
+	--star count
+	spr(8,8,1,0,3)
+	local starstr=string.format(":%d",player.stars)
+	outlinetext(starstr,17,5,1)
+	
+	--lives count
+	spr(8,view_height-9,1,3,0)
+	local lifestr=string.format("x%d",player.lives)
+	outlinetext(lifestr,17,view_height-8-3,1)
+	
+end
+
+
+
+--main game
+gs.ingame.step=function()
+	objs.update()
+	player.update()
+	clouds.update()
+	par.update()
+	camera.updateplayer()
+	clouds.draw()
+	objs.draw()
+	player.draw()
+	par.draw()
+	drawhud()
+	if key(key_start)==1 then
+		gs.swap(gs.paused)
+	end
+end
+
+--title screen
+gs.title.init=function()
+	camera.init()
+	par.init()
+	gs.title.logoscl=4
+	player.init()
+	player.lives=3
+	camera.x=0
+end
+gs.title.step=function()
+	--normal background
+	bg.normal()
+	--screen shake depends on the camera
+	camera.update()
+	--add some particles at the top/bottom of screen
+	--TODO: can't be bothered to do the change and test it, but this doesn't need to be an if, right? maybe? it's almost 3am
+	if flip>0 then
+		par.add(math.random(0,view_width), view_height+32 ,floatrand(-1,1),floatrand(-1,-4),0.5)
+	else
+		par.add(math.random(0,view_width), -32 ,floatrand(-1,1),floatrand(1,4),0.5)
+	end
+	par.update()
+	par.draw()
+	--draw player sprite
+	local pa=0
+	if t%30>15 then pa=1 end
+	spr(48-camera.x,94-camera.y,1,3-pa,0)
+	--draw logo
+	local logox,logoy=64-camera.x,view_height/2-camera.y
+	spr(logox,logoy,4+gs.title.logoscl,0,0)
+	--the logo zooms out from above the background, slamming into the screen
+	if gs.title.logoscl>0 then
+		gs.title.logoscl=gs.title.logoscl-0.1
+		if gs.title.logoscl<=0 then --SLAM!
+			camera.shake(5,50)
+			for ii=1,20 do --BAM!
+				par.add(logox, logoy, floatrand(-4,4), floatrand(-4,4), floatrand(1,2.5))
+			end
+		end
+	else
+		gs.title.logoscl=0
+	end
+	--credits
+	text("2020 B.M.Deeal",112-camera.x, view_height/2-4-camera.y,1,1)
+	--start game text
+	if t%60 < 50 then
+		text("press start!!",112-camera.x, view_height/2-4+10-camera.y,1,3)
+	end
+	--TODO: main menu
+	if key(key_start)==1 then
+		--gs.set(gs.ingame)
+		gs.titlecard.set("stage 1\nround 1",1)
+	end
+	--we're in alpha baby
+	text("[alpha version!]",0,0,1,3)
+end
+
+function init()
+	t=0
+	par.init()
+	bg.init()
+	gs.current.init()
+	flip=1
+end
+
+function step()
+	cls(0,0,0) --we probably don't need this, and I should make it magic pink so if something does make it visible, it's VERY noticeable 
+	bg.draw()
+	gs.current.step()
+	text(string.format("%4f", getfps()), view_width-4*8, view_height-8,1,2+flip)
+	t=t+1 --general purpose timer
+	flip=-flip --things that happen every other frame
+end

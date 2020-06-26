@@ -1,0 +1,323 @@
+--rain:dosage
+
+
+
+--small shorthands
+sq2=math.sqrt(2)
+
+
+--convert a time in frames to mm'ss"cc format, where m is minutes, s is seconds, and c is centiseconds
+function t2str(n)
+	local m=math.floor((n/60)/60)
+	local s=math.floor((n/60)%60)
+	local cs=math.floor(((n/60)*100)%100)
+	return string.format("%02d'%02d\"%02d", m, s, cs)
+end
+
+--background color handling
+bg={}
+bg.init=function(this)
+	this.r=0
+	this.g=0
+	this.b=0
+	this.spd=1
+end
+--smoothly fade to black from a color
+bg.set=function(this, r,g,b, spd)
+	if not spd then spd=1 end
+	this.r=r
+	this.g=g
+	this.b=b
+	this.spd=spd
+end
+--draw the background
+bg.draw=function(this)
+	cls(bg.r,bg.g,bg.b)
+end
+--automatically fade to black
+bg.update=function(this)
+	bg.r=math.max(0,bg.r-this.spd)
+	bg.g=math.max(0,bg.g-this.spd)
+	bg.b=math.max(0,bg.b-this.spd)
+end
+
+--reset the game completely
+function init()
+	flip=1
+	t=0
+	state:init()
+	bg:init()
+end
+
+
+bullets={}
+bullets.init=function(this)
+	this.max=128
+	for ii=1,this.max do
+		this[ii]={}
+		that=this[ii]
+		that.x=0
+		that.y=0
+		that.xd=0
+		that.yd=0
+		that.on=false
+		that.size=0.25
+	end
+end
+bullets.add=function(this, xo, yo, speed, angle, size)
+	if not size then
+		size=0.125
+	else
+		size=size*0.125
+	end
+	angle=math.rad(angle)
+	for ii=1,this.max do
+		that=this[ii]
+		if not that.on then
+			that.on=true
+			that.x=enemy.x+xo
+			that.y=enemy.y+yo
+			that.xd=math.cos(angle)*speed
+			that.yd=-math.sin(angle)*speed
+			that.size=size
+			return
+		end
+	end
+end
+
+bullets.update=function(this)
+	for ii=1,this.max do
+		that=this[ii]
+		if that.on then
+			if squcol(player.x,player.y,player.graze, that.x,that.y, that.size) then
+				player.grazing=true
+				score=score+2
+			end
+			if squcol(player.x,player.y,player.hit, that.x,that.y, that.size) then
+				--TODO: factor out to function
+				lives=lives-1
+				bg:set(128,32,32,1)
+				bullets:init()
+				return
+			end
+			that.x=that.x+that.xd
+			that.y=that.y+that.yd
+			if that.x<that.size or that.y<that.size or that.x>view_height+that.size or that.y>view_height+that.size then
+				that.on=false
+			end
+		end
+	end
+end
+
+bullets.draw=function(this)
+	for ii=1,this.max do
+		that=this[ii]
+		if that.on then
+			squ(that.x,that.y,that.size,244,244,16)
+		end
+	end
+end
+
+enemy={}
+enemy.init=function(this)
+	enemy.x=view_height/2
+	enemy.y=16
+end
+enemy.draw=function(this)
+	squ(this.x,this.y,1.5,144,16,16)
+	squ(this.x,this.y,1,244,244,244)
+	squ(this.x,this.y,0.5,44,16,16)
+end
+enemy.update=function(this)
+	this.x=view_height/2+math.sin(time/40)*20
+	if flip>0 then
+		bullets:add(0,0,0.75,time*28,1.5)
+	else
+		bullets:add(0,0,1,time*-28)
+	end
+end
+
+
+player={}
+player.init=function(this)
+	this.x=view_height/2
+	this.y=view_height-16
+	this.graze=1.25
+	this.size=0.75
+	this.hit=0.25
+	this.grazing=false
+	this.normalspeed=1
+	this.slowspeed=0.5
+	this.speed=this.normalspeed
+end
+
+--player control
+player.update=function(this)
+	--if the player is moving diagonally, account for the fact that they shouldn't be moving as fast
+	--which directions are we moving
+	local horiz=false
+	local vert=false
+	--how much to move
+	local xd=0
+	local yd=0
+	--reset the check if we're glancing enemy shots
+	this.grazing=false
+	--reset speed to normal...
+	this.speed=this.normalspeed
+	--...unless you're holding the slow key (TODO: do I want to add a fire mechanic to this game? it feels really weird being 100% dodging...)
+	if key(key_a)>0 then
+		this.speed=this.slowspeed
+	end
+	--clear all bullets on screen if you're bombing
+	if key(key_b)==1 and bombs>0 then
+		bombs=bombs-1
+		bullets:init()
+		bg:set(192,192,64,3)
+	end
+	--normal movement
+	if key(key_up)>0 then
+		yd=-this.speed
+		vert=true
+	elseif key(key_down)>0 then
+		yd=this.speed
+		vert=true
+	end
+	if key(key_left)>0 then
+		xd=-this.speed
+		horiz=true
+	elseif key(key_right)>0 then
+		xd=this.speed
+		horiz=true
+	end
+	--account for diagonal movement (if I move 2 units up each frame, and also move 2 units right each frame, I'll be moving 2*math.sqrt(2) frames diagonally each frame -- so we divide by that factor)
+	if horiz and vert then
+		yd=yd/sq2
+		xd=xd/sq2
+	end
+	this.x=this.x+xd
+	this.y=this.y+yd
+	--screen bounds
+	if this.x<8*this.size then
+		this.x=8*this.size
+	end
+	if this.y<8*this.size then
+		this.y=8*this.size
+	end
+	if this.x>view_height-8*this.size then
+		this.x=view_height-8*this.size
+	end
+	if this.y>view_height-8*this.size then
+		this.y=view_height-8*this.size
+	end
+	--TODO: title screen/game over screen so when the player dies, that's it
+end
+
+--show where the player is on screen
+player.draw=function(this)
+	local gcol=44
+	if this.grazing then
+		gcol=122
+	end
+	squ(this.x,this.y,this.graze,(16+bg.r)/2, (gcol+bg.g)/2, (44+bg.b)/2)
+	squ(this.x,this.y,this.size,16,16,16)
+	squ(this.x,this.y,this.hit,16,244,244)
+end
+
+--game states
+state={}
+state.ingame={}
+state.paused={}
+--called at the start of the game
+state.init=function(this)
+	this:set(state.ingame)
+end
+
+--change what state is running without initializing it
+state.swap=function(this, target)
+	this.current=target
+end
+
+--change state, initalize it
+state.set=function(this, target)
+	this:swap(target)
+	this.current:init()
+end
+
+--reset everything at the start of the game
+state.ingame.init=function(this)
+	score=0
+	lives=3
+	bombs=3
+	player:init()
+	enemy:init()
+	bullets:init()
+	time=0
+end
+
+--main game loop
+state.ingame.update=function(this)
+	bg:draw()
+	bg:update()
+	enemy:update()
+	player:update()
+	bullets:update()
+	player:draw()
+	enemy:draw()
+	bullets:draw()
+	score=score+1
+	time=time+1
+	drawhud()
+	if key(key_start)==1 then
+		state:set(state.paused)
+	end
+end
+
+--paused
+--TODO: confirm if want to exit to title
+state.paused.init=function(this)
+	this.option=false
+	this.time=0
+end
+--a
+state.paused.update=function(this)
+	cls(48,48,48)
+	player:draw()
+	enemy:draw()
+	bullets:draw()
+	drawhud()
+	if this.time<20 then
+		this.time=this.time+1
+	else
+		if key(key_start)==1 then
+			state:swap(state.ingame)
+		end
+	end
+	text("game\nis\npaused",4,4,2,0)
+end
+
+function drawhud()
+	local le=view_height+4 --left edge
+	local ttop=18 --top edge
+	local tspace=22 --spacing between info
+	local hudlo=4 --background gradient
+	local hudhi=48
+	local count=36
+	local yy=0
+	local spacing=view_height/count
+	for ii=0,count-1 do
+		local col=hudlo+(hudhi-hudlo)*ii/count
+		rect(view_height,yy,view_width-view_height,spacing+1,col, col/2, col*1.5)
+		yy=yy+spacing
+	end
+	text("rain:dosage", view_height+4,4,1,0)
+	text(string.format("score:\n %09d0", score), le, ttop,1,3)
+	text("time:\n "..t2str(time),le,ttop+tspace,1,3)
+	text(string.format("lives:\n %d", lives), le, ttop+tspace*2, 1,3)
+	text(string.format("bombs:\n %d", bombs), le, ttop+tspace*3, 1,3)
+end
+
+function step()
+	state.current:update()
+	flip=-flip
+	t=t+1
+end

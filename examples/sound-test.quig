@@ -1,0 +1,26 @@
+--sound test
+--quick music playback demo
+
+function init()
+end
+
+function step()
+	cls(64,64,64)
+	text("sound test",0,0,1,0)
+	if (key(key_a)==1) then
+		loopsong(0)
+	end
+	if (key(key_b)==1) then
+		loopsong(1)
+	end
+	if (key(key_start)==1) then
+		stopsong()
+	end
+	if (key(key_up)==1) then
+		playsound(0,0)
+	end
+	if (key(key_down)==1) then
+		playsound(1,1)
+	end
+	
+end
