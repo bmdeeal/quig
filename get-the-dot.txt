@@ -4,7 +4,7 @@ by B.M.Deeal
 ---
 
 -about-
-This tutorial is meant to cover the very basics of making a game with quig. This tutorial is set up for you, the reader, to get going with quig very quickly, showing you how to make a game.
+This tutorial is meant to cover the very basics of making a game with quig. This tutorial is set up for you, the reader, to get going with quig very quickly, showing you how to make a game. It isn't an example of best practices, but some effort is made to keep things organized.
 
 To keep things simple, this tutorial uses only colored squares, not needing you to provide sprites.
 This tutorial assumes a basic understanding of programming, and ideally a basic understanding of Lua. If you are entirely unfamiliar with Lua, you might want to go look up a tutorial on using it. It isn't difficult, but it is somewhat different from other common programming languages.
@@ -23,7 +23,7 @@ Very simple, right? Let's go.
 
 Anything between [code start] and [code end] is game code, rather than descriptive text. Remember: don't include [code start] or [code end] in your quig file!
 
-The easiest way to get started is to copy blank.quig and blank.png from the examples folder and rename them to gtd.quig and gtd.png, respectively.
+The easiest way to get started is to copy blank.quig and blank.png from the examples folder and rename them to gtd.quig and gtd.png respectively.
 
 After doing this, gtd.quig should have two functions in them already, like as follows:
 [code start]
@@ -33,7 +33,7 @@ function step()
 end
 [code end]
 
-First, let's handle the player. We'll use a Lua table to store information about the player, along with a few functions about it.
+With that code in place, let's handle the player. We'll use a Lua table to store information about the player, along with a few functions about it.
 
 [code start]
 --player control
@@ -68,10 +68,9 @@ function init()
 end
 [code end]
 
-Still nothing on screen. Let's get the player drawn.
+There's still nothing on screen. Let's get the player drawn.
 
-First, let's add a function to draw the player, a simple white rectangle.
-In a basic game like this, it might seem like overkill since the player is just a plain rectangle, but as your game expands, you want your code cleanly delineated into different functions.
+First, we'll add a function to draw the player, a simple white rectangle.
 
 [code start]
 --the player is just a plain white rectangle
@@ -92,7 +91,7 @@ When drawing the player, we use the squ() function, which takes six parameters:
 quig makes its squares the same size as a sprite, 16x16 pixels. The scale determines how much larger to make the square (eg, putting in 2.5 would make a 40x40 square). 
 In addition, squares (and sprites) in quig are centered around their x/y position.
 
-Now that we can draw the player... nothing is on screen yet. We still haven't done anything after initializing the player object.
+Now that we can draw the player... we still haven't called that function, so nothing is on screen yet.
 
 To change that, let's update the screen in the step function.
 
@@ -103,7 +102,7 @@ function step()
 end
 [code end]
 
-Run the game now and... there's a white square on screen. It's entirely stationary though, since we still need to handle player input. 
+Run the game now and presto! There's a white square on screen. It's entirely stationary though, since we still need to handle player input. 
 
 Getting the player to move isn't too hard though, we just need to change player.x and player.y based on what keys on the controller they're pressing.
 
@@ -150,7 +149,7 @@ player.update=function()
 end
 [code end]
 
-In addition, we'll need to actually put this in the step() function for it to run:
+In addition, we'll need to call the update function during step() for it to run:
 
 [code start]
 function step()
@@ -163,7 +162,7 @@ end
 
 This is a lot of code all at once, but it's pretty self explanatory.
 At the start, we reset how fast the player can go.
-After that, we check to see if the player is using up the boost. If they have boost and are pressing the A/B-buttons, they boost.
+After that, we check to see if the player is using up the boost. If they have boost and are pressing the A or B-button, they boost.
 
 From there, we use the current player max speed combined with what direction the player wants to move to move the player around.
 Once the player moves, we have to keep the player on screen. We save some space on each side since the player's x/y position needs to account for the size of the square.
@@ -188,7 +187,7 @@ buttons:
 On an Xinput controller, A and B are exactly that, A and B. In addition, X and Y act as B and A respectively. Start is the menu button, to the right of the guide button.
 
 quig uses SDL's controller API, which is designed to try and make all controllers fit into the same sort of layout as an Xinput device. It supports some normal "Dinput" (HID) controllers, and tries to map the buttons as best as it can, mostly based on physical positioning, but the button names might be different (for example, the iBuffalo SNES/SFC style controller 
-quig doesn't support a lot of non-Xinput controllers as a result.
+quig doesn't support a lot of non-Xinput controllers as a result. This may change in the future.
 As of this writing, quig doesn't use the analog stick at all on a controller. This will eventually be fixed.
 
 On a keyboard, the keys Z, S, Q, and 2 act as the A-button. For the B-button, keys X, A, W, and 1 are used. Enter is the start button, and the arrow keys act as the D-pad.
@@ -199,7 +198,7 @@ The key() function returns a number based on how long the key is pressed. It ret
 
 quig currently doesn't return any larger values than 2 to check how long a key has been held, but will in the future. 
 
-If you run the game now, the player moves and can run around briefly with the boost button.
+If you run the game now, the player moves and can run around briefly with the boost button. Success!
 There still isn't much of a game yet, so let's add the dot that the player has to get.
 
 [code start]
@@ -233,7 +232,7 @@ Since we don't have dot.teleport(), let's write it:
 --move the dot around
 --this is mathematically unsound (it's possible mathematically to get a long string of clustered numbers that just fit in where the player is)
 --but a computer RNG that clustered its values like that would be severely suspect, so we blithely check forever
---TODO (for the reader): make this more fair on the player -- you can get a string of far left, far right, far left, etc spawns and the player can't do anything whatsoever if they've already used their boost up
+--TODO (for the reader, after they're done with the tutorial): make this more fair -- the player can get a string of far left, far right, far left, etc spawns and they can't do anything whatsoever if they've already used their boost up
 dot.teleport=function()
 	--ensure that the dot never lands exactly on the player
 	repeat
@@ -316,7 +315,7 @@ end
 
 With this, the game should be done, right? The player exists, the dot exists, and you can run around, collecting dots. That's it, yeah?
 
-There's still more. For starters, there isn't much game. The score isn't shown. The score bonus doesn't tick down. There's a little bit of polish that's missing too. Apart from the major issues, the game is missing a lot of small things like a title screen and pausing.
+We're almsot done, but there's still more needed. For starters, there isn't much of a game. The score isn't shown. The score bonus doesn't tick down. There's a little bit of polish that's missing too. Apart from the major issues, the game is also missing a stuff like a title screen and pausing.
 
 Let's draw the player information. Score, time, boost.
 
@@ -330,9 +329,9 @@ function topbar()
 end
 [code end]
 
-The function is short, but there's quite a bit to explain.
+There's quite a bit to explain here.
 
-We draw a gray background bar with quig's rect() function.
+We start by drawing a gray background bar with quig's rect() function.
 rect() is a bit different compared to squ():
 	* x - how far from the left the top-left of the rectangle is
 	* y - how far from the top the top-left of the rectangle is
@@ -372,7 +371,7 @@ See the pattern?
 The d is used for integer numbers. You can use f for dealing with floating point numbers too. 
 You might want to read a page on format specifiers for more details, such as <https://www.tutorialspoint.com/format-specifiers-in-c>. This page isn't for Lua specifically (it's for C), but Lua uses the same format specifiers.
 
-We go through the trouble of using string.format because it allows us to make the score display a fixed length. In our case, scores are always shown with have seven digits.
+We go through the trouble of using string.format because it allows us to make the score display a fixed length. In our case, scores are always shown with seven digits.
 
 We use view_width to position things like the amount of remaining boost and how much time is left relative to the right edge of the screen.
 
@@ -394,7 +393,6 @@ end
 [code end]
 
 Now, you can see the score going up. The timer isn't counting down as time passes, though. 
-
 To fix that, we'll add another function that ticks everything down:
 
 [code start]
@@ -443,8 +441,8 @@ For that, we need to know if a: the game is in a "paused" state, and if a game i
 Edit init() to look as follows:
 [code start]
 -re-initialize everything
---this function is REQUIRED by quig
---we also call it when the player loses
+--this function is REQUIRED by quig and runs when the game first starts up
+--we also call it ourselves when the player loses
 function init()
 	--start the game paused
 	paused=true
@@ -484,9 +482,9 @@ This function is pretty simple. It always shows the "press start" message, so th
 After that, it shows different messages based on whether there is a game running or not, showing either the game controls and the name of the game, or displaying a paused message on top of the player and the dot.
 
 The "dirty hack" where it just calls math.random() on its own basically changes the RNG based on how long the game is paused/on the title. quig will have a proper way to initialize the RNG at some point, but it doesn't right now.
-We can't just do the usual way of initializing the RNG in Lua using math.randomseed(os.time()), because quig doesn't support the os.* functions.
+We can't just do the usual way of initializing the RNG in Lua using math.randomseed(os.time()), because quig doesn't support the os.* functions. As of this writing, they're accessible, but future versions of quig WILL remove them.
 
-It's a bit annoying that lua throws reading the system clock together with running arbitrary commands (like deltree and rm -rf and the lot).
+It's a bit annoying that Lua throws reading the system clock together with running arbitrary commands (which can lead to destructive results, whether on accident or on purpose).
 This workaround has one issue -- the very first dot position is constant on game startup, since init() calls dot.teleport(). Fixing this is left as an exercise for the reader.
 
 Now, a few modifications to step() need to be made to actually get this to work, and the game is complete. Or at least, completely playable.
@@ -529,9 +527,10 @@ There are still several issues with it. The biggest issue is that the player can
 Try your hand at fixing this while still keeping things challenging. 
 
 In addition, the graphics are a little drab. Try drawing some sprites, and using the spr() function! Maybe add some detail to the background, mess with the colors, go wild!
-Make the game your own. The source of get-the-dot! is licensed under CC0, which means you can do anything you want with it.
+Make the game your own. The source of get-the-dot! is licensed under CC0, which means you can do anything you want with it. Change some stuff, slap your name on it, show your friends!
 
-Hopefully, you're more comfortable with using quig and are ready to start working on your own games!
+Hopefully, you're more comfortable with using quig and are ready to start working on your own games.
 
+Have fun making games with quig!
 --B.M.Deeal
 

@@ -9,15 +9,17 @@
 
     You should have received a copy of the GNU General Public License along with this program.
     If not, see <https://www.gnu.org/licenses/>.
+
+	---
 	
 	per-version TODO:
 	for 0001:
-	* clean up sound support
+	* should refactor input handling, it's a mess and it doesn't need to be 
 	
 	for 0002:
 	* file reading/writing isn't particularly well tested at all
 	* really need to check on squcol, need to make an example game with it that needs actually precise collision, I miiight have like an off-by-one error or something, dunno
-	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course)
+	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course), or honestly just 
 	* analog stick support
 	* have quig go through a list of supported formats for audio files -- we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform), but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
 	
@@ -28,7 +30,7 @@
 	* selectable gif export length? or at least make it so that it can be ended early (eg, pressing select again)
 	* frame blending option during display (we do this during gif export, so it should be reasonable as a runtime option)
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
-	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw
+	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this
 	
 	for 0004 and beyond:
 	* more examples (in-progress)
@@ -62,7 +64,7 @@ extern "C" {
 #include "quig.h"
 
 //constants
-const char *QUIG_VERSION="0001-beta";
+const char *QUIG_VERSION="0001-beta2";
 const int QUIG_DEBUG = 1; //TODO: compile script flag for this
 const int FPS_RATE = 60; //quig runs at a fixed 60fps
 const int FPS_TICKS = (1000 / FPS_RATE);
@@ -530,6 +532,7 @@ void setPixel(SDL_Surface *target, int x, int y, Uint32 color) {
 //generateFont -- convert the font data
 //we call this four times to generate each variation
 //this is kinda ugly but whatever
+//TODO: we probably don't need to fill the background, having it as part of the character causes ugly scaling artifacts
 SDL_Surface* generateFont(int mode) {
 	//font holds up to 256 chracters, but large portions are empty
 	if (mode >= 4 || mode < 0) {

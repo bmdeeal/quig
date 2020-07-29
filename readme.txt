@@ -17,6 +17,8 @@ About:
 
 quig is a very simple program designed to let you quickly and easily make small games with Lua. The various limitations found in quig are largely designed to keep the process simple and easy -- low resolution to reduce the focus on graphics, few buttons to encourage pick-up-and-play titles, and a small command set that contains the essentials of what is needed to make a game.
 
+A simple tutorial showing how to create a simple game is provided. See get-the-dot.txt for details.
+
 At the moment, it's not really a fantasy console or anything.
 In addition, it's maybe a bit too simple, and the lack of integrated editors (in particular, for graphics) really does make it less than obvious to get started with, even if it's not too hard. Draw some graphics, write some code, play. 
 
@@ -31,7 +33,7 @@ For example, my-game.quig would contain the Lua source and my-game.png would con
 System requirements:
 
 quig has been tested under Raspbian Linux and Windows 10 (via MSYS2).
-quig requires SDL2, SDL_image, and Lua 5.3. In addition, the GUI launcher requires YAD and bash and currently is not known to run on Windows.
+quig requires SDL2, SDL_image, and Lua 5.3. In addition, the GUI launcher requires YAD and bash, and it currently is not known to run on Windows.
 quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops.
 quig was initially developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution there. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
 
@@ -70,10 +72,13 @@ When in windowed mode, quig will automatically resize the window to the largest 
 Controls:
 
 quig pretends that it's hooked up to a controller with the following layout:
+[D-pad  start  A B]
+
+On a keyboard, this maps to:
 	Arrow keys: D-Pad
 	Z/S/Q/2: A-button
 	X/A/W/1: B-button
-	Enter: Start button
+	Enter: start button
 
 This layout was designed to be usable on a lot of keyboards, where many combinations of four keys (both buttons+diagonal input) may not work.
 
@@ -82,7 +87,7 @@ In addition, if your controller is supported by SDL's game controller API, the m
 	Xinput A/Y (bottom and top buttons): A-button
 	Xinput B/A (left side and right side buttons): B-button
 	Start (generally the center or center-right button): Start button
-As of this writing, the analog stick is unsupported in quig. Future versions will map the analog stick as a d-pad input.
+As of this writing, the analog stick is unsupported in quig. Future versions will map the analog stick as a D-pad input.
 
 If your controller isn't recognized, make sure that it is the only controller plugged into the computer, as quig may be attempting to use a different controller. In addition, Xinput controllers are far more likely to work than other controller types as of this writing (as one set of mappings allows all to work).
 Future versions of quig may support custom controller mappings.
@@ -95,7 +100,7 @@ The Esc key immediately quits quig.
 ===
 Compile/Install:
 
-quig requires Lua 5.3, SDL2, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
+quig requires Lua 5.3, SDL2, SDL_mixer, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
 On Debian and Ubuntu based systems, ./deps-debian.sh will install the required dependencies for you.
 quig has been compiled on Windows with MSYS2, and ./deps-msys2.sh will install the required dependencies if you wish to build quig yourself.
 
@@ -115,6 +120,8 @@ empty.quig just has the two required functions, and empty.png is entirely filled
 
 ===
 Command reference (it's quite short!):
+TODO: document the sound functions once I stabilize the details of that API
+TODO: same with file saving
 
 * cls(red, green, blue)
 	Clear the screen to a given color.
@@ -194,32 +201,34 @@ Constants reference:
 ===
 Future release to-do list:
 
-* a proper tutorial -- like, we could have a simple dodging game as an example that they would create on their own, going through getting user input, making an object system, and then polishing things up with things like a title screen and pausing
 * hiragana text support (the font is loaded, but there isn't a good way to access it, maybe add control characters? I might make the control character ~, so avoid using it)
-* add a way to save game data
 * maybe add paletted versions of various commands? sprites still have no palette restriction, but you should be able to define a palette and not constantly have to do things like palette[2].r,palette[2].g,palette[2].b or directly inputting color codes over and over
-* although quig is a command-line program, there's absolutely no reason to not ship a front-end with quig -- might write a simple one with bash+yad or something, but I would like to write a proper front-end
+* although quig is a command-line program, a good front-end is a must, and the one that quig currently ships with isn't terribly good
 * add option to force-run a game without a graphics file (likely with the position of the intended sprite overlaid?)
-* add a combined .quigpak format that puts the graphics and the game in the same file
+* add a combined .quigpak format that puts the graphics and the game in the same file and provide a utility for packing/unpacking games
 
 ===
-Additional notes and musings:
+Additional notes:
 
-Programs for quig are just that -- programs. As such, they may be able to access or modify files and other data on your machine. Do not run quig games from a source you do not trust. If you wouldn't download and install a normal program from that source, you shouldn't trust a quig game from it either.
-As of this writing, quig loads ALL of the Lua standard library. This will change in the future -- Lua's file I/O and various OS interaction functions will be removed.
+Be very careful: programs for quig are programs like any other on your system. As such, they may be able to access or modify files and other data on your machine. Do not run quig games from a source you do not trust. If you wouldn't download and install a normal program from that source, you shouldn't trust a quig game from it either.
 
-If a quig game lacks a graphics file, one workaround to run it is to simply rename another. examples/works-all.png is provided for this purpose (it's ugly, but it's made to be visible).
+As of this writing, quig loads ALL of the Lua standard library. This will almost certainly change in the future -- Lua's file I/O and various OS interaction functions will be removed. This doesn't guarantee security by any means, it just makes it so that a developer using quig has to go out of their way to be malicious.
+
+If a quig game lacks a graphics file, one workaround to run it is to simply rename another. examples/works-all.png is provided for this purpose. It's quite ugly, but it's made to be visible.
 In the future, there might be a quig option that generates a simple texture for this purpose.
+
+===
+Some musings:
 
 The first game I wrote with quig was astro-burst, and a lot of the feature set in quig was built around being able to create "pseudo-3D" sprite scaling games, similar to Sega's classic mid-80s/early-90s output. quig can't match them for resolution or detail due to its other goals, but it can deliver a sizzlingly fast experience with tons of graphics thrown on screen.
 
-astro-burst and pop.drop'n were developed as showcases for quig. With astro-burst, I wanted something immediately impressive, and a pseudo-3D driving game in space seemed like the trick. 
+astro-burst and pop.drop'n were developed as showcases for quig. With astro-burst, I wanted something immediately impressive, and a pseudo-3D (well, the graphics calcuations are in 3D, but the camera doesn't rotate at all) driving game in space seemed like the trick. 
 
 get-the-dot! is a game I want to expand on, but I have to contend with the fact that it's meant to be a tutorial piece on using quig. Unlike the two showcase games, which are meant as proper, monolithic releases (and are licensed under the GPLv3 as a result), get-the-dot! was designed as a particularly simple game to introduce how to use quig.
 
 It's still not too huge -- 174 heavily commented and somewhat spaced out lines as of this writing, but I really keep wanting to expand on it. This really veers hard from the idea of a small game for tutorial use, where the reader, when finished, would have their own version of get-the-dot!. Yeah, I should stop with all of the lowercased and punctuated proper nouns, but alas.
 
-get-the-dot! is provided under CC0, so you can do anything whatsoever to it. My name doesn't even show up when it's running. That's not to say I'm not proud of it, and I spent a bit of time trying to tweak it to make it a more fun to play game out of the box -- the boost system makes it more exciting by far, but ultimately, the project is for those who want to get started with quig, and adding a bazillion bells and whistles and things like particles and what-have-you would really get in the way of delivering a good introductory tutorial.
+get-the-dot! is provided under CC0, so you can do anything whatsoever to it. My name doesn't even show up when it's running. That's not to say I'm not proud of it, and I spent a bit of time trying to tweak it to make it a more fun to play game out of the box -- the boost system makes it more exciting by far, but ultimately, the project is for those who want to get started with quig, and adding a bazillion bells and whistles and things like particles and what-have-you would really get in the way of delivering a good introductory tutorial, and leaving some gaps for you, the reader, to fill in is important.
 
 Like, I guess I could write another tutorial on how to add that stuff, but I'd much rather work on a different aspect of the project.
 
@@ -231,7 +240,9 @@ During this whole 2020 "stuck at home" deal, developing quig provided a nice way
 
 It was a good learning experience too. Embedding Lua was a surprisingly easy task, and it let me brush up on using SDL2, which was something I had done before, but not in any particularly major project.
 
+I have somewhat recently moved to a Pi 4. One major design decision made in quig was to focus on pure software drawing, which was probably a mistake, but given the poor desktop hardware acceleration support on earlier Pi models, it's a mistake I can live with. One artifact of this is that by default, quig starts up in software mode.
+
 You can probably port quig games to something like TIC-80 semi-easily. Maybe. The quig command set is quite small, and only file saving wouldn't really mesh too well. spr could be easily implemented with two textri calls.
 
-Also, I really should look into getting sound going. Seriously.
+Sound is implemented, but a: hasn't had much testing, and b: seems to have a few issues. SDL_Mixer seems to have issues with resuming stopped music. If I load the music files as ordinary sounds, I have no such issues, but quig now takes longer to start up and loads all of that into memory at once.
 

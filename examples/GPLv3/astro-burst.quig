@@ -44,16 +44,15 @@
 	---
 	
 	TODO:
-	* how to play screen
+	* decorative objects -- stages look a bit plain, might throw in some terrain types that don't actually affect the ship, they're just drawn differently
+	* how to play screen -- might just have it be a course with text on the screen explaining the controls while you drive through the various terrain types
 	* more levels (in progress)
-	* "campaigns" -- just sets of levels at fixed speedclasses to clear
+	* "campaigns" -- just sets of levels at fixed speedclasses to clear (maybe yes, maybe no, not sure if I want to bother, might just have the campaign be a straight "do all the races in order, you get three tries" affair)
 	* major code cleanups -- in particular, a lot of things are done in a rather ad-hoc fashion
 	* attract screen? kinda pointless, but a nice bit of extra polish
 	* the code commenting in some spots is bad -- we explain everything because this is an example, but some stuff is underexplained while some stuff is way overexplained
-	
-	other, possibly far-off ideas:
 	* score/time saving (quig now has some file handling support but it needs major testing)
-	* music/sound (music might be out, but sound is a maybe; this requires support in quig, so this might be fairly far off)
+	* music/sound -- dunno if I'll do music, but we definitely need some sfx, quig supports it now
 --]]
 
 --convert a time in frames to mm'ss"cc format, where m is minutes, s is seconds, and c is centiseconds
@@ -68,7 +67,7 @@ end
 speed_class=3; --1: easy, 2: basic, 3: normal, 4: turbo, 5: maniac
 
 --make a new table for holding speed class related stuff
---TODO: this gets called other places, when they could and should just use the sc table
+--TODO: this gets called other places, when they could and should just use the sc table, GO REPLACE ALL CALLS OF makeSpeedTable(), add them to sc[] instead
 --didn't think things through at the time, paying for it now
 function makeSpeedTable()
 	return {
@@ -96,14 +95,12 @@ sc[3].bg={r=6,  g=6,  b=24}
 sc[4].bg={r=7,  g=6,  b=20}
 sc[5].bg={r=6,  g=4,  b=16}
 
---TODO: ALL of this below really needs to be moved into the sc table
 --holds how much time you get at the start
-start_times=makeSpeedTable()
-start_times[1].time=40
-start_times[2].time=30
-start_times[3].time=20
-start_times[4].time=18
-start_times[5].time=17
+sc[1].time=40
+sc[2].time=30
+sc[3].time=20
+sc[4].time=18
+sc[5].time=17
 --holds how much time passing a checkpoint gate gives you
 time_bonuses=makeSpeedTable()
 time_bonuses[1].time=28
@@ -212,14 +209,14 @@ end
 levels.create[1]=function()
 	levels.start()
 	levels.add(1400,2900,20)
-	levels.add(1300,5000,20)
+	levels.add(1300,5000,20,6)
 	levels.add(3000,0,40)
 	levels.add(4000,10000,30)
 	levels.add(2000,0,30)
 	levels.add(2000,0,25,1)
-	levels.add(4000,-10000,20)
-	levels.add(3000,-12000,10)
-	levels.add(4000,-20000,30)
+	levels.add(4000,-10000,20,6)
+	levels.add(3000,-12000,10,6)
+	levels.add(4000,-20000,30,6)
 	levels.add(2000,0,100)
 	levels.add(4000,-6000,25,1)
 	levels.add(4000,-7000,10)
@@ -233,7 +230,7 @@ levels.create[1]=function()
 	levels.add(2000,10000,20)
 	levels.add(3000,16000,20)
 	levels.add(3500,20000,10)
-	levels.add(2000,0,40)
+	levels.add(2000,0,40,6)
 	levels.add(2000,0,22,1)
 	levels.add(3000,10000,30)
 	levels.add(3000,20000,24)
@@ -241,12 +238,12 @@ levels.create[1]=function()
 	levels.add(3000,40000,12)
 	levels.add(3000,40000,50)
 	levels.add(4000,0,50)
-	levels.add(2000,0,20)
+	levels.add(2000,0,20,6)
 	levels.add(1000,500,10)
 	levels.add(1200,0,30,1)
 	levels.add(1400,15000,60)
 	levels.add(1600,30000,40)
-	levels.add(2000,30000,30)
+	levels.add(2000,30000,30,6)
 	levels.add(3000,15000,20)
 	levels.add(3000,0,60)
 	levels.finish()
@@ -271,10 +268,10 @@ levels.create[2] = function()
 	levels.add(1500,-10000,20)
 	levels.add(2000,-10000,10)
 	levels.add(2000,-15000,10)
-	levels.add(3000,-25000,13)
+	levels.add(3000,-25000,13,6)
 	levels.add(1500,-24000,40)
 	levels.add(2000,-24000,30)
-	levels.add(3000,-10000,20)
+	levels.add(3000,-10000,20,6)
 	levels.add(2500,-2000,30)
 	levels.add(2000,0,22,1)
 	levels.add(2000,0,30)
@@ -292,15 +289,15 @@ levels.create[2] = function()
 	levels.add(3500,5000,20)
 	levels.add(4000,10000,18)
 	levels.add(3900,20000,16)
-	levels.add(4000,30000,14)
+	levels.add(4000,30000,14,6)
 	levels.add(2000,30000,14)
 	levels.add(800,30000,40)
 	levels.add(2500,30000,30)
-	levels.add(3000,20000,20)
-	levels.add(3100,10000,10)
-	levels.add(2000,10000,10)
-	levels.add(3500,10000,10)
-	levels.add(2000,20000,20)
+	levels.add(3000,20000,20,6)
+	levels.add(3100,10000,10,6)
+	levels.add(2000,10000,10,6)
+	levels.add(3500,10000,10,6)
+	levels.add(2000,20000,20,6)
 	levels.add(1900,0,30)
 	levels.add(2000,0,25,1)
 	levels.add(2000,0,30)
@@ -426,61 +423,92 @@ levels.create[4] = function()
 end
 
 levels.create[5]=function()
-levels.start()
-levels.add(1000,0,50)
-levels.add(1000,-3000,40)
-levels.add(900,1000,25,1)
-levels.add(900,100,40)
-levels.add(1000,10000,40)
-levels.add(1000,10000,40)
-levels.add(4000,-4000,20)
-levels.add(4000,-4000,20)
-levels.add(2000,-4000,20,1)
-levels.add(1000,13000,30,3)
-levels.add(3000,13000,10)
-levels.add(3300,4000,30)
-levels.add(3300,4000,5)
-levels.add(1000,10000,30,3)
-levels.add(1000,10000,5)
-levels.add(2200,18000,30)
-levels.add(2200,18000,5)
-levels.add(1500,5600,25)
-levels.add(1500,5600,10,1)
-levels.add(3000,0,20)
-levels.add(3000,15000,30,3)
-levels.add(2000,0,30,3)
-levels.add(800,0,30,1)
-levels.add(2000,0,30,3)
-levels.add(3000,-15000,30,3)
-levels.add(3000,0,30,3)
-levels.add(1000,0,10)
-levels.add(1700,0,10)
-levels.add(1400,0,10,4)
-levels.add(1700,2000,10,4)
-levels.add(1400,0,10)
-levels.add(1700,-2000,10,4)
-levels.add(1000,0,10)
-levels.add(1000,0,10)
-levels.add(1100,16000,80)
-levels.add(1100,16000,20,1)
-levels.add(1100,0,80)
-levels.add(4000,0,20)
-levels.add(800,0,5)
-levels.add(4000,0,20)
-levels.add(800,2700,7)
-levels.add(4000,2700,20)
-levels.add(800,0,9)
-levels.add(6000,0,20)
-levels.add(800,-2700,7)
-levels.add(4000,-2000,20)
-levels.add(800,0,9)
-levels.add(1000,600,40)
-levels.add(1800,0,50,4)
-
-levels.finish()
+	levels.start()
+	levels.add(1000,0,50)
+	levels.add(1000,-3000,40)
+	levels.add(900,1000,25,1)
+	levels.add(900,100,40)
+	levels.add(1000,10000,40)
+	levels.add(1000,10000,40)
+	levels.add(4000,-4000,20)
+	levels.add(4000,-4000,20)
+	levels.add(2000,-4000,20,1)
+	levels.add(1000,13000,30,3)
+	levels.add(3000,13000,10)
+	levels.add(3300,4000,30)
+	levels.add(3300,4000,5)
+	levels.add(1000,10000,30,3)
+	levels.add(1000,10000,5)
+	levels.add(2200,18000,30)
+	levels.add(2200,18000,5)
+	levels.add(1500,5600,25)
+	levels.add(1500,5600,10,1)
+	levels.add(3000,0,20)
+	levels.add(3000,15000,30,3)
+	levels.add(2000,0,30,3)
+	levels.add(800,0,30,1)
+	levels.add(2000,0,30,3)
+	levels.add(3000,-15000,30,3)
+	levels.add(3000,0,30,3)
+	levels.add(1000,0,10)
+	levels.add(1700,0,10)
+	levels.add(1400,0,10,4)
+	levels.add(1700,2000,10,4)
+	levels.add(1400,0,10)
+	levels.add(1700,-2000,10,4)
+	levels.add(1000,0,10)
+	levels.add(1000,0,10)
+	levels.add(1100,16000,80)
+	levels.add(1100,16000,25,1)
+	levels.add(1100,0,80)
+	levels.add(4000,0,20)
+	levels.add(800,0,5)
+	levels.add(4000,0,20)
+	levels.add(800,2700,7)
+	levels.add(4000,2700,20)
+	levels.add(800,0,9)
+	levels.add(6000,0,20)
+	levels.add(800,-2700,7)
+	levels.add(4000,-2000,20)
+	levels.add(800,0,9)
+	levels.add(1000,600,40)
+	levels.add(1800,0,30,4)
+	levels.finish()
 end
 
---TODO: at least 4 more levels
+levels.create[6]=function()
+	levels.start()
+	levels.add(2000,-6000,40)
+	levels.add(2000,0,50,3)
+	levels.add(2000,5000,20,3)
+	levels.add(3000,0,20,1)
+	levels.add(4000,0,20,6)
+	levels.add(4000,16000,20,6)
+	levels.add(5000,16000,8,6)
+	levels.add(3000,0,50,6)
+	levels.add(5000,0,8,6)
+	levels.add(4000,-16000,20,6)
+	levels.add(5000,-16000,8,6)
+	levels.add(4000,0,20,6)
+	levels.add(1000,0,20,1)
+	levels.add(1100,0,20)
+	levels.add(7000,0,20)
+	levels.add(1400,2000,20)
+	levels.add(6000,-4000,20)
+	levels.add(1700,-6000,20)
+	levels.add(1700,-6000,10)
+	levels.add(5000,8000,20)
+	levels.add(2000,10000,20)
+	levels.add(2000,10000,10)
+	levels.add(4000,-12000,20)
+	levels.add(4000,-12000,10)
+	levels.add(2000,-0,20)
+	levels.add(2000,-0,20,1)
+	levels.add(2000,-0,20)
+	levels.finish()
+end
+
+--TODO: at least 2 more levels (total 8)
 
 --smoothly move to a point
 --I don't know the proper name for this, but it's dead useful
@@ -629,8 +657,14 @@ objects.draw=function()
 				rx,ry,rs=camera.get2D(objects[ii].x, objects[ii].y+1000,objects[ii].z)
 				squ(rx,ry,rs,159,128,73)
 			end
+			--draw decorative tunnel
+			if objects[ii].flag == 6 and objects[ii].odd > 0  then
+				rx,ry,rs=camera.get2D(objects[ii].x - objects[ii].width*2/3, objects[ii].y-2000, objects[ii].z)
+				spr(rx,ry,rs*6,objects[ii].tx,objects[ii].ty)
+				rx,ry,rs=camera.get2D(objects[ii].x + objects[ii].width*2/3, objects[ii].y-2000, objects[ii].z)
+				spr(rx,ry,rs*6,objects[ii].tx,objects[ii].ty)
 			--overhead signs, etc
-			if objects[ii].flag ~=0 and objects[ii].odd>0 then
+			elseif objects[ii].flag ~=0 and objects[ii].odd>0 then
 				rx,ry,rs=camera.get2D(objects[ii].x, objects[ii].y-3000, objects[ii].z)
 				spr(rx,ry,rs*9,objects[ii].tx,objects[ii].ty)
 			end
@@ -656,6 +690,7 @@ objects.add=function(offset, width, flag)
 			objects.odd=-objects.odd
 			objects[ii].flag=flag
 			--object types:
+			--TODO: split road type
 			--checkpoints
 			if flag==1 then objects[ii].tx=3 end
 			--goal
@@ -675,11 +710,16 @@ objects.add=function(offset, width, flag)
 				objects[ii].tx=3
 				objects[ii].ty=1
 			end
+			-- decoration 1
+			if flag==6 then
+				objects[ii].tx=6
+				objects[ii].ty=1
+			end
 			return
 		end
 	end
 end
---used for sorting
+--used for z-sorting
 objects.cmp=function(a,b)
 	if a.z > b.z then return true end
 	return false
@@ -690,7 +730,7 @@ player.init=function()
 	player.status=0 --what surface are we driving on?
 	player.oob=false -- are we out of bounds?
 	player.oobtimer=0
-	player.time=start_times[speed_class].time*60 --time remaining
+	player.time=sc[speed_class].time*60 --time remaining
 	player.runtime=0 --play time
 	player.score=0 --added a score system for a somewhat different chalenge than gotta-go-fast
 	player.score_gain=0 --how much did you earn?
@@ -756,7 +796,7 @@ player.update=function()
 	--TODO: different slow values based on speed class?
 	--or maybe just a fixed ratio based on max speed
 	if player.status==5 then
-		if player.speed>2.8 then player.speed=2.8 end
+		if player.speed>1.5 then player.speed=player.speed-0.25 end
 	end
 	
 	--adjust xdspeed based on speed a bit
@@ -800,6 +840,7 @@ player.update=function()
 	--check for out of bounds
 	local left_barrier, right_barrier, left_barrier2, right_barrier2
 	player.oob=false
+	--we give a bit of leniency here, checking both the current and upcoming barriers for out-of-bounds, and only saying that's it if both are true
 	left_barrier=player.offset-player.width-280
 	right_barrier=player.offset+player.width+280
 	left_barrier2=player.offset2-player.width2-280
@@ -900,15 +941,18 @@ end
 
 --game mode stuff
 gmode={}
-gmode.title={}
-gmode.time_over={}
-gmode.ingame={}
-gmode.pause={}
-gmode.stage_select={}
-gmode.stage_clear={}
+gmode.warning={} --photosensitivity warning
+gmode.title={} --title screen
+gmode.time_over={} --game over
+gmode.ingame={} --main game loop
+gmode.pause={} --pause/exit menu
+gmode.stage_select={} --pick a stage+difficulty
+gmode.stage_clear={} --end of level
+gmode.attract={} --make it so the title screen doesn't just sit there forever
+
 --resets the game to the title
 gmode.init=function()
-	gmode.current=gmode.title
+	gmode.current=gmode.warning
 end
 --change game mode and do initialization
 gmode.set=function(m)
@@ -928,6 +972,45 @@ function step()
 	flip=-flip
 end
 
+gmode.attract.go=function(c,g)
+	local this=gmode.attract
+	this.current=c
+	if g then
+		this.gap=g
+	else
+		this.gap=10
+	end
+	this.time=0
+end
+
+--attract sequence
+gmode.attract.init=function()
+	local this=gmode.attract
+	--scrolling logos
+	this.section[1]=function()
+		
+	end
+	
+	this.section={}
+	this.current=1
+	this.gap=0
+	this.time=0
+	this.go(1)
+end
+gmode.attract.step=function()
+	local this=gmode.attract
+	if this.gap>0 then
+		this.gap=this.gap-1
+	else
+		this.section[this.current]()
+		this.time=this.time+1
+	end
+	if key(key_start)==1 then
+		gmode.set(gmode.title)
+		return
+	end
+end
+
 --title screen
 gmode.title.init=function()
 	player.init()
@@ -938,26 +1021,35 @@ gmode.title.init=function()
 	t=0
 end
 gmode.title.step=function()
+	--start game
+	--TODO: this should have three options, start, settings, and how to play
 	if key(key_start)==1 then
 		gmode.set(gmode.stage_select)
 		return
 	end
+	--add some particles
 	if flip>0 then
 		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
 	end
+	--constantly add road
+	--TODO: should we leave this straight?
 	if t%10==0 then
 		objects.add(0,3000,0)
 	end
+	--general update
 	objects.update()
 	stars.draw()
 	moon.draw()
-	player.speed=1
+	player.speed=1 --the road movement depends on player speed
 	objects.draw()
 	particles.update()
 	particles.draw()
 	rect(0,0,16,16,255,255,255) --fixes a weird glitch with the text, I need to look into what's happening, could be the result of SDL2's software scaling being a bit bugged with clipping around the edges
+	--labels
 	text("astro-burst astro-burst astro-burst astro-burst ",-15*12-((t//4)%(16*12)),0,2,0)
 	text("2020 B.M.Deeal\n-beta version-",0,16,1,1)
+	--flashing start text
+	--TODO: this should be a menu
 	if t%60 > 12 then
 		text("[press start button]",(view_width-20*8)/2,view_height-12,1,2+flip)
 	end
@@ -1266,6 +1358,24 @@ gmode.stage_clear.step=function()
 	end
 end
 
+--warning text
+--largely a courtesy, the attract mode is flashy, but the whole game is fairly flashy
+--TODO: the actual warning text is a bit... non-descriptive
+gmode.warning.init=function()
+	init_most()
+end
+gmode.warning.step=function()
+	cls(50,50,50)
+	text("Welcome to astro-burst!",0,0,1,0)
+	text("\n(C) 2020 B.M.Deeal\nLicensed under GPLv3.\n\n---\n\n\n\nThis game features flickering\nlights.\nPlayer discretion is advised.",0,8,1,3)
+	text("\nPhotosensitivity warning:",0,8*6,1,0)
+	text("press start to play...",0,view_height-8,1,1)
+	if key(key_start)==1 then
+		gmode.set(gmode.title)
+		return
+	end
+end
+
 --stage select screen stuff
 gmode.stage_select.selection=1 --what stage was picked
 gmode.stage_select.shift=0 --location of the selected stage text
@@ -1332,7 +1442,7 @@ gmode.stage_select.step=function()
 		end
 	end
 	
-	--pick stage, have it slide in
+	--pick stage, have it slide in smoothly
 	if key(key_left)==1 then
 		this.selection= this.selection-1
 		this.shift=view_width
@@ -1343,7 +1453,7 @@ gmode.stage_select.step=function()
 	end
 	
 	--clamp stages
-	local stages=5 --TODO: this should probably be specified elsewhere
+	local stages=8 --TODO: this should probably be specified elsewhere
 	if this.selection<1 then this.selection=stages end
 	if this.selection>stages then this.selection=1 end
 	
@@ -1374,11 +1484,15 @@ gmode.stage_select.step=function()
 	this.shift=target(0, this.shift, 6)
 	--select a stage
 	if key(key_a)==1 then
-		levels.create[this.selection]()
-		gmode.set(gmode.ingame)
-		return
+		if levels.create[this.selection] then
+			levels.create[this.selection]()
+			gmode.set(gmode.ingame)
+			return
+		else
+			cls(0,0,0)
+		end
 	end
-	--TODO: this is only for testing
+	--TODO: this is only for testing, really should remove this at some point
 	--debug stage
 	if key(key_start)==1 then
 		this.selection=0
