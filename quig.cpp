@@ -12,15 +12,21 @@
 
 	---
 	
+	other, major TODO:
+	* really should get this building on Windows with something other than MSYS2 so I don't need to distribute a gazillion DLLs -- quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
+	* audio should be a compile-time option
+	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
+	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
+	
 	per-version TODO:
 	for 0001:
 	* should refactor input handling, it's a mess and it doesn't need to be 
+	* really should give a look over the API so we don't do wild, breaking changes once we get to a not-beta release
 	
 	for 0002:
 	* file reading/writing isn't particularly well tested at all
 	* really need to check on squcol, need to make an example game with it that needs actually precise collision, I miiight have like an off-by-one error or something, dunno
-	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course), or honestly just 
-	* analog stick support
+	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course), or honestly just draw the backgrounds separately
 	* have quig go through a list of supported formats for audio files -- we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform), but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
 	
 	for 0003:
@@ -30,13 +36,13 @@
 	* selectable gif export length? or at least make it so that it can be ended early (eg, pressing select again)
 	* frame blending option during display (we do this during gif export, so it should be reasonable as a runtime option)
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
-	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this
+	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this really
 	
 	for 0004 and beyond:
 	* more examples (in-progress)
 	* a better frontend, or at least one that works on Windows without lots of configuration
 	* config file (eg, default video settings, etc)
-	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions -- at least the program isn't likely to expand too much beyond joystick and sound handling
+	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions
 	
 	other potential features:
 	* add blending layer?
@@ -64,7 +70,7 @@ extern "C" {
 #include "quig.h"
 
 //constants
-const char *QUIG_VERSION="0001-beta2";
+const char *QUIG_VERSION="0001-beta2a";
 const int QUIG_DEBUG = 1; //TODO: compile script flag for this
 const int FPS_RATE = 60; //quig runs at a fixed 60fps
 const int FPS_TICKS = (1000 / FPS_RATE);
@@ -75,7 +81,7 @@ const int VIEW_HEIGHT=144; //9 tiles, 18 characters
 //sound stuff
 const int NUM_CHANNELS = 8;
 const int AUDIO_MAX=31; //00-30
-bool sound_enabled=false;
+bool sound_enabled=false; //has audio been initialized
 int sound_freq=48000;
 int buffer_len=2048;
 
@@ -206,18 +212,18 @@ void setWindowScale(int s) {
 	window_height=(VIEW_HEIGHT*window_scale);
 }
 
-//quig isn't hardware accelerated (at all), but we do at least stretch the final screen size in hardware if asked to
-//and hardware accel is required for vsync
+//quig isn't hardware accelerated (at all, even though it probably could/should be), but we do at least stretch the final screen size in hardware if asked to
+//and doing that is required for vsync
 enum class DisplayMode {
 	soft, hard_novsync, hard_vsync
 };
-DisplayMode display_mode=DisplayMode::soft; //TODO: make this a compile-time option, and it really should be hard by default, if I weren't writing this on the Pi 2, it would be
+DisplayMode display_mode=DisplayMode::soft; //TODO: make this a compile-time option, and it really should be hard by default, if I didn't start development of this program on a Pi 2, it would be
 bool fullscreen=false; //TODO: fullscreen ignores aspect ratio, need to fix that
 
 
 //TODO: allow the user to specify the screen scale rather than it being entirely automatic
 //TODO: main should bail if this function returns !=0
-//TODO: --help
+//TODO: add a --help and -? option
 int handleArgs(int argc, char **argv) {
 	int size=-1; //automatically set the screen scale based on screen width and screen height (minus 64)
 	std::string current="";
@@ -279,7 +285,7 @@ int handleArgs(int argc, char **argv) {
 		else {
 			std::cerr << "error: could not get display information! Window will be unscaled." <<std::endl;
 		}
-		setWindowScale(min(xscale,yscale));
+		setWindowScale(min2(xscale,yscale));
 		//limit the size of software scaling because it's slow and if you're running in software, you probably aren't (or shouldn't be) driving a high-res screen
 		if (display_mode==DisplayMode::soft && window_scale > 3) {
 			setWindowScale(3);
@@ -327,6 +333,7 @@ int initRecording() {
 //TODO: add an option to change what frames we record
 //TODO: doesn't Windows complain badly if we spend too long spinning on a task without updating the window? We need to look into that...
 int saveRecording() {
+	static int savenum; //TODO: name
 	//this really should only show up if I messed up somewhere
 	if (frames_recorded<=-1) {
 		std::cerr << "error: this message SHOULD NOT APPEAR; attempting to save recorded frames that don't exist!\n";
@@ -338,7 +345,7 @@ int saveRecording() {
 	SDL_Surface *target_surf=SDL_CreateRGBSurface(0, VIEW_WIDTH, VIEW_HEIGHT, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0);
 	//also, if you can't write to the current directory, this doesn't work
 	int gifdelay=3; //TODO: make configurable
-	//TODO: each invocation gets an increasing number for filename
+	//TODO: each invocation gets an increasing number for filename so you can save multiple clips
 	//generate filename
 	//std::stringstream outbuild;
 	//outbuild << "quig-record-" << std::setfill('0') << std::setw(4) << record_num << ".gif";
@@ -393,12 +400,15 @@ int doRecording() {
 	return 0;
 }
 
-//max, min -- compare numbers
-int max(int a, int b) {
+//maxN, minN -- compare numbers
+int max2(int a, int b) {
 	if (a>b) { return a; }
 	return b;
 }
-int min(int a, int b) {
+int max3(int a, int b, int c) {
+	return max2(a, max2(b, c));
+}
+int min2(int a, int b) {
 	if (a<b) { return a; }
 	return b;
 }
@@ -406,12 +416,16 @@ int min(int a, int b) {
 //controller handling
 SDL_GameController *controller = NULL;
 //massive duplication of work because SDL handles controller input wildly differently than keyboard input
-//TODO: analog stick, cleanup
+//TODO: cleanup
 struct ControllerState {
 	enum {
 		//TODO: rename the contents of this enum so it's more consistent with the Inputs struct
 		a=0,b,x,y,u,d,l,r,s,sel,end
 	};
+	int stick_up=0;
+	int stick_down=0;
+	int stick_left=0;
+	int stick_right=0;
 	int buttons[end];
 	int	button_quig_b=0; //buttons X and B on the Xbox-style layout
 	int button_quig_a=0; //buttons Y and A on the Xbox-style layout
@@ -423,6 +437,51 @@ struct ControllerState {
 	}
 	//update the controller's state, we the mix this together with the keyboard input's state
 	void readState() {
+		//analog stick
+		int deadzone=14000;
+		int jsx, jsy;
+		jsx=SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTX);
+		jsy=SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTY);
+		//stick to right
+		if (jsx>deadzone) {
+			stick_right++;
+			if (stick_right>2) {
+				stick_right=2;
+			}
+		}
+		else {
+			stick_right=0;
+		}
+		//stick to left
+		if (jsx<-deadzone) {
+			stick_left++;
+			if (stick_left>2) {
+				stick_left=2;
+			}
+		}
+		else {
+			stick_left=0;
+		}
+		//stick down
+		if (jsy>deadzone) {
+			stick_down++;
+			if (stick_down>2) {
+				stick_down=2;
+			}
+		}
+		else {
+			stick_down=0;
+		}
+		//stick up
+		if (jsy<-deadzone) {
+			stick_up++;
+			if (stick_up>2) {
+				stick_up=2;
+			}
+		}
+		else {
+			stick_up=0;
+		}
 		//a
 		if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A)) {
 			buttons[a]++;
@@ -509,9 +568,11 @@ struct ControllerState {
 			std::cerr<<buttons[ii];
 		}
 		std::cerr<<"b\n";
+		std::cerr<<"js: "<<jsx<<", " <<jsy <<"\n";
 		*/
-		button_quig_b=max(buttons[b], buttons[x]);
-		button_quig_a=max(buttons[a], buttons[y]);
+		//handle the dual mapping for A/B
+		button_quig_b=max2(buttons[b], buttons[x]);
+		button_quig_a=max2(buttons[a], buttons[y]);
 	}
 };
 ControllerState controllerState;
@@ -533,6 +594,7 @@ void setPixel(SDL_Surface *target, int x, int y, Uint32 color) {
 //we call this four times to generate each variation
 //this is kinda ugly but whatever
 //TODO: we probably don't need to fill the background, having it as part of the character causes ugly scaling artifacts
+//maybe we'll just draw the rectangle as ceil(scale)
 SDL_Surface* generateFont(int mode) {
 	//font holds up to 256 chracters, but large portions are empty
 	if (mode >= 4 || mode < 0) {
@@ -591,7 +653,7 @@ void cleanup() {
 
 //handle input -- 0 is not pressed, 1 is just pressed, 2 is held.
 //usually, you just want to check for >0 or ==1
-//this used to be the only thing holding input until controller handling was implemented
+//this used to be the only thing holding input until controller handling was implemented, look at how small and clean it is
 struct Inputs {
 	static const int UP = 0;
 	static const int DOWN = 1;
@@ -1418,13 +1480,33 @@ int main(int argc, char* argv[]) {
 		if (controller) {
 			controllerState.readState();
 		}
-		inputs_final.keys[inputs.UP]=max(inputs.keys[inputs.UP], controllerState.buttons[controllerState.u]);
-		inputs_final.keys[inputs.DOWN]=max(inputs.keys[inputs.DOWN], controllerState.buttons[controllerState.d]);
-		inputs_final.keys[inputs.LEFT]=max(inputs.keys[inputs.LEFT], controllerState.buttons[controllerState.l]);
-		inputs_final.keys[inputs.RIGHT]=max(inputs.keys[inputs.RIGHT], controllerState.buttons[controllerState.r]);
-		inputs_final.keys[inputs.START]=max(inputs.keys[inputs.START], controllerState.buttons[controllerState.s]);
-		inputs_final.keys[inputs.B]=max(inputs.keys[inputs.B], controllerState.button_quig_b);
-		inputs_final.keys[inputs.A]=max(inputs.keys[inputs.A], controllerState.button_quig_a);
+		
+		inputs_final.keys[inputs.UP]=max3(
+			inputs.keys[inputs.UP],
+			controllerState.buttons[controllerState.u],
+			controllerState.stick_up
+		);
+		
+		inputs_final.keys[inputs.DOWN]=max3(
+			inputs.keys[inputs.DOWN],
+			controllerState.buttons[controllerState.d],
+			controllerState.stick_down
+		);
+		
+		inputs_final.keys[inputs.LEFT]=max3(
+			inputs.keys[inputs.LEFT],
+			controllerState.buttons[controllerState.l],
+			controllerState.stick_left
+		);
+		
+		inputs_final.keys[inputs.RIGHT]=max3(
+			inputs.keys[inputs.RIGHT],
+			controllerState.buttons[controllerState.r],
+			controllerState.stick_right
+		);
+		inputs_final.keys[inputs.START]=max2(inputs.keys[inputs.START], controllerState.buttons[controllerState.s]);
+		inputs_final.keys[inputs.B]=max2(inputs.keys[inputs.B], controllerState.button_quig_b);
+		inputs_final.keys[inputs.A]=max2(inputs.keys[inputs.A], controllerState.button_quig_a);
 		
 		//update game, give the user an error if something goes wrong (usually just a syntax error)
 		if (step_fn()) {

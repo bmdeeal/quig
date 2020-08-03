@@ -19,5 +19,6 @@ void do_cls(int r, int g, int b);
 int c_cls(lua_State *LL);
 void registerLuaFn();
 int main(int argc, char* argv[]);
-int max(int a, int b);
-int min(int a, int b);
+int max2(int a, int b);
+int max3(int a, int b, int c);
+int min2(int a, int b);

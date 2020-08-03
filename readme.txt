@@ -33,8 +33,8 @@ For example, my-game.quig would contain the Lua source and my-game.png would con
 System requirements:
 
 quig has been tested under Raspbian Linux and Windows 10 (via MSYS2).
-quig requires SDL2, SDL_image, and Lua 5.3. In addition, the GUI launcher requires YAD and bash, and it currently is not known to run on Windows.
-quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops.
+quig requires SDL2, SDL_image, SDL_mixer, and Lua 5.3. In addition, the GUI launcher requires YAD and bash (so it currently is not known to run on Windows).
+quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops in the example game astro-burst.
 quig was initially developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution there. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
 
 ===
@@ -83,11 +83,10 @@ On a keyboard, this maps to:
 This layout was designed to be usable on a lot of keyboards, where many combinations of four keys (both buttons+diagonal input) may not work.
 
 In addition, if your controller is supported by SDL's game controller API, the mappings are as follows:
-	D-Pad: D-Pad
+	Analog stick, D-Pad: D-Pad
 	Xinput A/Y (bottom and top buttons): A-button
 	Xinput B/A (left side and right side buttons): B-button
 	Start (generally the center or center-right button): Start button
-As of this writing, the analog stick is unsupported in quig. Future versions will map the analog stick as a D-pad input.
 
 If your controller isn't recognized, make sure that it is the only controller plugged into the computer, as quig may be attempting to use a different controller. In addition, Xinput controllers are far more likely to work than other controller types as of this writing (as one set of mappings allows all to work).
 Future versions of quig may support custom controller mappings.

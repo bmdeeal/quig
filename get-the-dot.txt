@@ -184,11 +184,10 @@ buttons:
 	* key_b
 	* key_start
 
-On an Xinput controller, A and B are exactly that, A and B. In addition, X and Y act as B and A respectively. Start is the menu button, to the right of the guide button.
+On an Xinput controller, A and B are exactly that, A and B. In addition, X and Y act as B and A respectively. Start is the menu button, to the right of the guide button. The d-pad is exactly that, and the left analog stick also sends digital d-pad input to the game.
 
-quig uses SDL's controller API, which is designed to try and make all controllers fit into the same sort of layout as an Xinput device. It supports some normal "Dinput" (HID) controllers, and tries to map the buttons as best as it can, mostly based on physical positioning, but the button names might be different (for example, the iBuffalo SNES/SFC style controller 
-quig doesn't support a lot of non-Xinput controllers as a result. This may change in the future.
-As of this writing, quig doesn't use the analog stick at all on a controller. This will eventually be fixed.
+quig uses SDL's controller API, which is designed to try and make all controllers fit into the same sort of layout as an Xinput device. It supports some normal "Dinput" (HID) controllers, and tries to map the buttons as best as it can, mostly based on physical positioning, but the button names might be different.
+Due the use of this API, quig doesn't support a lot of non-Xinput controllers as a result. This may change in the future.
 
 On a keyboard, the keys Z, S, Q, and 2 act as the A-button. For the B-button, keys X, A, W, and 1 are used. Enter is the start button, and the arrow keys act as the D-pad.
 
@@ -196,7 +195,7 @@ Games for quig should use the terms "A-button", "B-button", "start button", and 
 
 The key() function returns a number based on how long the key is pressed. It returns 0 if the key isn't pressed, and after that, it returns a value based on how long the key has been pressed. You generally want to check if it's equal to 0, equal to 1, or greater than 0.
 
-quig currently doesn't return any larger values than 2 to check how long a key has been held, but will in the future. 
+quig currently doesn't return any larger values than 2 to check how long a key has been held, but may in the future. 
 
 If you run the game now, the player moves and can run around briefly with the boost button. Success!
 There still isn't much of a game yet, so let's add the dot that the player has to get.
