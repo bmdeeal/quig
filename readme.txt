@@ -7,8 +7,7 @@ Legal:
 quig is distributed under the GPLv3, see quig-license.txt for details.
 In addition, see the files under other-licenses/ for the licensing details of other libraries that quig uses, such as SDL and Lua.
 
-Games developed with quig are not required to be licensed under the GPL. They are considered to be merely bundled with quig if distributed alongside.
-You can even develop commercial products with quig. This is acceptable as long as the quig interpreter itself and modifications to it are distributed under the GPLv3 and the licenses for the other components are followed.
+Sources for many libraries are provided in libraries-w32/sources.7z.
 
 Several of the example files are under the GPLv3, several are under CC0 (effectively no restrictions). Check the license if you want to copy the code into your own game or build off of the examples!
 
@@ -32,7 +31,7 @@ For example, my-game.quig would contain the Lua source and my-game.png would con
 ===
 System requirements:
 
-quig has been tested under Raspbian Linux and Windows 10 (via MSYS2).
+quig has been tested under Raspbian Linux and Windows 10 (via MSYS2 and a VS2019 build).
 quig requires SDL2, SDL_image, SDL_mixer, and Lua 5.3. In addition, the GUI launcher requires YAD and bash (so it currently is not known to run on Windows).
 quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops in the example game astro-burst.
 quig was initially developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution there. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
@@ -97,13 +96,18 @@ The F8 key on the keyboard allows you to record a few seconds of gameplay as qui
 The Esc key immediately quits quig. 
 
 ===
-Compile/Install:
+Compile:
 
-quig requires Lua 5.3, SDL2, SDL_mixer, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
+On Linux or via MSYS2, quig requires Lua 5.3, SDL2, SDL_mixer, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
 On Debian and Ubuntu based systems, ./deps-debian.sh will install the required dependencies for you.
 quig has been compiled on Windows with MSYS2, and ./deps-msys2.sh will install the required dependencies if you wish to build quig yourself.
 
 Run ./build.sh to compile quig. build.sh uses pkg-config to provide the correct compiler flags.
+
+On Windows with VS2019, the quig-for-windows.sln project is pre-configured to be ready to compile 32-bit x86 builds. 
+You will still need the .dll files for each of the libraries (available in dll-files.7z).
+
+[TODO: proper install instructions]
 
 ===
 Development:

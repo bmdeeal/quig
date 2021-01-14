@@ -64,6 +64,7 @@ colors.jump=function()
 		b=math.random(range)+offset
 	}
 end
+
 --viewport control
 camera={}
 camera.init=function()
@@ -79,6 +80,7 @@ camera.updateplayer=function()
 	camera.update()
 	camera.x=camera.x+player.x-camera.bound
 end
+
 --update the camera, call this if you need camera features but there's no player
 camera.update=function()
 	camera.s=camera.s-camera.st
@@ -86,6 +88,7 @@ camera.update=function()
 	camera.x=floatrand(-camera.s,camera.s)
 	camera.y=floatrand(-camera.s,camera.s)
 end
+
 --shake screen (assuming things take into account camera position -- particles and objects do, anything manually drawn needs to be handled)
 camera.shake=function(amount,time)
 	camera.st=amount/time
@@ -520,7 +523,8 @@ objs.init=function()
 			xd=0,
 			yd=0,
 			--scale
-			s=1,
+			s=1, --native size
+			cs=1, --hitbox scale
 			sc=1, --drawn size is s*sc
 			--active? y/n
 			on=false,
@@ -603,6 +607,8 @@ end
 
 --add a new object if there's space in the table
 objs.add=function(nx,ny,ntype,ns,naction)
+	--shrink hitbox for particularly dangerous objects
+	local fairscl=0.8
 	--default scale
 	if not ns then ns=1 end
 	--default action (nothing)
@@ -619,6 +625,7 @@ objs.add=function(nx,ny,ntype,ns,naction)
 			this.type=ntype
 			this.action=none
 			this.s=ns
+			this.cs=this.s --collision size
 			this.sc=1 --scale coefficient on top of normal scale
 			--decode object types
 			--bouncers
@@ -644,6 +651,7 @@ objs.add=function(nx,ny,ntype,ns,naction)
 				this.tx=7
 				this.ty=1
 				this.action=spikeflash
+				this.cs=fairscl
 			elseif ntype=="star" then
 				this.tx=0
 				this.ty=3
@@ -652,6 +660,7 @@ objs.add=function(nx,ny,ntype,ns,naction)
 				this.tx=5
 				this.ty=1
 				this.action=downflash
+				this.cs=fairscl
 			end
 			if naction~=none then
 				this.action=naction
@@ -673,7 +682,7 @@ objs.update=function()
 			if this.sc<1 then this.sc=1 end
 			--collisions
 			--objects check if the player hit them, since it's just a many->one relation, objects don't interact with each other really
-			if squcol(player.x,player.y,1, this.x,this.y,this.s) then
+			if squcol(player.x,player.y,1, this.x,this.y,this.cs) then
 				local dojump=true --most objects replenish jumps, specify if to not bother by setting this to false
 				this.sc=1.5
 				if this.type=="bounce" then

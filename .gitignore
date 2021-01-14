@@ -1,4 +1,12 @@
 guff/
+Release/
+Debug/
+.vs/
 quig
 quig-vid.gif
 *.bak
+*.dll
+*.pdb
+*.ipdb
+*.iobj
+quig-for-windows.exe

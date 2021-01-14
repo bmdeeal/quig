@@ -31,7 +31,7 @@
 	Steer the spaceship through the gates with the d-pad. As you drive, you will encounter several gates with icons above them. These gates affect your ship in different ways:
 	* Checkpoint -- Every checkpoint gate you pass through gives you a little bit more time before you are disqualified.
 	* Ice -- Your ship will move a bit faster, but your controls are also far more sensitive. Exciting, but also dangerous. It's quite hard to recover when on ice, because your turning is very, very sensitive.
-	* Slow -- Your ship will slow down quite a bit. Turning speed is not impacted. You can't avoid it, so it can even help you take particularly hard corners... but in some cases, you might find yourself turning too hard as you pass through it and be sent flying off!
+	* Slow -- Your ship will slow down quite a bit. You can't avoid it, so it can even help you take particularly hard corners... but in some cases, you might find yourself turning too hard as you pass through it and be sent flying off!
 	* Magnet -- Your ship will be attracted away from the center. Stay near the center line to avoid or reduce the effect, and correct your course as needed.
 	* Goal -- The end! Passing through a goal gate ends the course and displays your score and time. Make some records and then smash through them!
 	
@@ -44,9 +44,9 @@
 	---
 	
 	TODO:
-	* decorative objects -- stages look a bit plain, might throw in some terrain types that don't actually affect the ship, they're just drawn differently
+	* decorative objects -- stages look a bit plain, might throw in some terrain types that don't actually affect the ship, they're just drawn differently [in progress!]
 	* how to play screen -- might just have it be a course with text on the screen explaining the controls while you drive through the various terrain types
-	* more levels (in progress)
+	* more levels [in progress!]
 	* "campaigns" -- just sets of levels at fixed speedclasses to clear (maybe yes, maybe no, not sure if I want to bother, might just have the campaign be a straight "do all the races in order, you get three tries" affair)
 	* major code cleanups -- in particular, a lot of things are done in a rather ad-hoc fashion
 	* attract screen? kinda pointless, but a nice bit of extra polish
@@ -481,7 +481,7 @@ levels.create[6]=function()
 	levels.add(2000,-6000,40)
 	levels.add(2000,0,50,3)
 	levels.add(2000,5000,20,3)
-	levels.add(3000,0,20,1)
+	levels.add(3000,0,30,1)
 	levels.add(4000,0,20,6)
 	levels.add(4000,16000,20,6)
 	levels.add(5000,16000,8,6)
@@ -502,9 +502,25 @@ levels.create[6]=function()
 	levels.add(2000,10000,10)
 	levels.add(4000,-12000,20)
 	levels.add(4000,-12000,10)
-	levels.add(2000,-0,20)
-	levels.add(2000,-0,20,1)
-	levels.add(2000,-0,20)
+	levels.add(2000,0,20)
+	levels.add(2000,0,25,1)
+	levels.add(2000,0,20)
+	levels.add(1000,-2100,50,4)
+	levels.add(1000,1000,20,3)
+	levels.add(2000,-5000,50,3)
+	levels.add(3000,20000,40,4)
+	levels.add(3000,20000,20,4)
+	levels.add(4000,20000,10)
+	levels.add(1000,20000,35,1)
+	levels.add(4000,20000,10)
+	levels.add(1000,20000,40,4)
+	levels.add(3000,20000,40,4)
+	levels.add(2000,10000,40,3)
+	levels.add(1000,10000,40,3)
+	levels.add(6000,10000,10,3)
+	levels.add(1000,-10000,40,3)
+	levels.add(1000,-10000,20,3)
+	levels.add(3000,10000,40,3)
 	levels.finish()
 end
 
@@ -690,7 +706,7 @@ objects.add=function(offset, width, flag)
 			objects.odd=-objects.odd
 			objects[ii].flag=flag
 			--object types:
-			--TODO: split road type
+			--TODO: add a split road type
 			--checkpoints
 			if flag==1 then objects[ii].tx=3 end
 			--goal
@@ -984,14 +1000,27 @@ gmode.attract.go=function(c,g)
 end
 
 --attract sequence
+--TODO: finish, have play every ___ seconds on the title screen
 gmode.attract.init=function()
 	local this=gmode.attract
-	--scrolling logos
+	this.section={}
 	this.section[1]=function()
-		
+		text("high\nspeed\nspace\nrace",0,0,4,0)
+	end
+	this.section[2]=function()
+		text("beat the clock! beat the clock! beat the clock!", -this.time,8,3,0)
+	end
+	this.section[3]=function()
+		text("fastest\nin\nthe\ngalaxy",0,0,4,0)
+	end
+	this.section[4]=function()
+		text("get ready for\n(todo: finish this sequence)",0,0,1,1)
+	end
+	this.section[5]=function()
+		gmode.set(gmode.title)
+		return
 	end
 	
-	this.section={}
 	this.current=1
 	this.gap=0
 	this.time=0
@@ -1008,6 +1037,10 @@ gmode.attract.step=function()
 	if key(key_start)==1 then
 		gmode.set(gmode.title)
 		return
+	end
+	if this.time>90 then
+		this.current=this.current+1
+		this.go(this.current)
 	end
 end
 
@@ -1371,7 +1404,7 @@ gmode.warning.step=function()
 	text("\nPhotosensitivity warning:",0,8*6,1,0)
 	text("press start to play...",0,view_height-8,1,1)
 	if key(key_start)==1 then
-		gmode.set(gmode.title)
+		gmode.set(gmode.attract) --asdf
 		return
 	end
 end

@@ -17,17 +17,20 @@
 	* audio should be a compile-time option
 	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
 	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
+	* proper analog stick direction check -- it is way too easy to hit diagonal inputs on accident, we should check based on the angle rather than just an x/y check
 	
 	per-version TODO:
 	for 0001:
 	* should refactor input handling, it's a mess and it doesn't need to be 
 	* really should give a look over the API so we don't do wild, breaking changes once we get to a not-beta release
+	* document audio playback and file saving, provide proper examples
+	* file reading/writing isn't particularly well tested at all
 	
 	for 0002:
-	* file reading/writing isn't particularly well tested at all
+	* user configurable deadzone for analog stick
 	* really need to check on squcol, need to make an example game with it that needs actually precise collision, I miiight have like an off-by-one error or something, dunno
 	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course), or honestly just draw the backgrounds separately
-	* have quig go through a list of supported formats for audio files -- we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform), but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
+	* have quig go through a list of other supported formats for audio files -- we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform), but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
 	
 	for 0003:
 	* spr_xys and squ_xys with separate x/y scale (VERY easy, just need to do it)
@@ -50,9 +53,14 @@
 	* even if the "mode 7" layer didn't rotate, it would be cool to do anyway
 */
 
+
 #include <SDL.h>
 #include <SDL_image.h>
+
+#ifndef QUIG_NOSOUND
 #include <SDL_mixer.h>
+#endif
+
 extern "C" {
 #include <lua.h>
 #include <lualib.h>
@@ -90,6 +98,7 @@ std::string arg_name;
 //the above, without the extension
 std::string base_name;
 
+#ifndef QUIG_NOSOUND
 //music
 struct quig_Music {
 	Mix_Music *mus=NULL; //loaded song
@@ -144,10 +153,12 @@ struct quig_Sound {
 	}
 };
 quig_Sound samples[AUDIO_MAX];
+#endif
 
 //TODO: log errors
 void initAudio() {
 	sound_enabled=false;
+	#ifndef QUIG_NOSOUND
 	std::cerr << "notice: initializing audio...\n";
 	if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		std::cerr << "error: couldn't initialize SDL audio!\n";
@@ -193,6 +204,7 @@ void initAudio() {
 			std::cerr << "notice: loaded sound file '" << soundstr_wav << "!'\n";
 		}
 	}
+	#endif
 }
 
 //these were constants, now they aren't
@@ -217,7 +229,7 @@ void setWindowScale(int s) {
 enum class DisplayMode {
 	soft, hard_novsync, hard_vsync
 };
-DisplayMode display_mode=DisplayMode::soft; //TODO: make this a compile-time option, and it really should be hard by default, if I didn't start development of this program on a Pi 2, it would be
+DisplayMode display_mode=DisplayMode::hard_novsync; //TODO: make this a compile-time option for what is default?
 bool fullscreen=false; //TODO: fullscreen ignores aspect ratio, need to fix that
 
 
@@ -438,12 +450,13 @@ struct ControllerState {
 	//update the controller's state, we the mix this together with the keyboard input's state
 	void readState() {
 		//analog stick
-		int deadzone=14000;
+		int deadzone=13000; //TODO: move this
 		int jsx, jsy;
 		jsx=SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTX);
 		jsy=SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTY);
+		//TODO: this needs to be based on the stick angle and not just x/y position
 		//stick to right
-		if (jsx>deadzone) {
+		if (jsx>deadzone) { 
 			stick_right++;
 			if (stick_right>2) {
 				stick_right=2;
@@ -631,7 +644,7 @@ SDL_Surface* generateFont(int mode) {
 		}
 	}
 	//load hiragana
-	//TODO: you can't really use them
+	//TODO: you can't really use them yet, need to provide a way to access them
 	for (int cc=0; cc<96; cc++) {
 		for (int jj=0; jj<8; jj++) {
 			for (int ii=0; ii<8; ii++) {
@@ -646,7 +659,7 @@ SDL_Surface* generateFont(int mode) {
 
 
 //cleanup -- registered with atexit(), clean up everything at the end
-//we don't actually cleanup much right now, should really look into that
+//we don't actually cleanup much right now, should really look into that, although none of the platforms we target right now have anything get left behind if we don't
 void cleanup() {
 	SDL_Quit();
 }
@@ -979,52 +992,66 @@ int c_getfps(lua_State *LL) {
 	return 1;
 }
 
+
+
 int c_playsound(lua_State *LL) {
 	int sound=(int)lua_tonumber(LL,1);
 	int channel=(int)lua_tonumber(LL,2);
+	#ifndef QUIG_NOSOUND
 	if (sound<AUDIO_MAX && sound>=0 && channel<NUM_CHANNELS) {
 		samples[sound].play(channel);
 	}
+	#endif
 	return 0;
 }
 int c_loopsound(lua_State *LL) {
 	int sound=(int)lua_tonumber(LL,1);
 	int channel=(int)lua_tonumber(LL,2);
+	#ifndef QUIG_NOSOUND
 	if (sound<AUDIO_MAX && sound>=0 && channel<NUM_CHANNELS) {
 		samples[sound].playloop(channel);
 	}
+	#endif
 	return 0;
 }
 
 int c_stopsound(lua_State *LL) {
 	int channel=(int)lua_tonumber(LL,1);
+	#ifndef QUIG_NOSOUND
 	Mix_HaltChannel(channel);
+	#endif
 	return 0;
 }
 
 //c_playsong -- play a music file from lua code
 int c_playsong(lua_State *LL) {
 	int song=(int)lua_tonumber(LL,1);
+	#ifndef QUIG_NOSOUND
 	if (song<AUDIO_MAX && song>=0) {
 		songs[song].play();
 	}
+	#endif
 	return 0;
 }
 
 //c_loopsong -- loop a music file from lua code
 int c_loopsong(lua_State *LL) {
 	int song=(int)lua_tonumber(LL,1);
+	#ifndef QUIG_NOSOUND
 	if (song<AUDIO_MAX && song>=0) {
 		songs[song].playloop();
 	}
+	#endif
 	return 0;
 }
 
 //c_stopsong -- stop music from playing from lua code
-//there's a weird thing where SDL_Mixer will stutter when replaying a song after this -- really would like to know how to fix it
+//TODO: there's a weird thing where SDL_Mixer will stutter when replaying a song after this -- really would like to know how to fix it
 int c_stopsong(lua_State *LL) {
+	#ifndef QUIG_NOSOUND
 	//Mix_RewindMusic();
 	Mix_HaltMusic();
+	#endif
 	return 0;
 }
 

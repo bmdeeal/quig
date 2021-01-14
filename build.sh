@@ -4,7 +4,7 @@
 # At the moment, this has been tested under Raspbian (on a Pi 2 and a Pi 4) and Windows 10 (with MSYS2).
 #TODO: look for a local copy of Lua or SDL in the quig folder, for systems without pkg-config
 #TODO: does SDL need a similar set of names to check like Lua does?
-#TODO: add a nice way to build without SDL_mixer, it's not like sound is THAT important
+#TODO: add a nice way to build without SDL_mixer, it's not like sound is THAT important (in progress)
 
 echo "notice: quig build script started!"
 echo "notice: identifying Lua..."
@@ -28,6 +28,12 @@ else
 	exit 1
 fi
 echo "notice: Lua detected as '$luaname'!"
+
+#enable or disable sound
+#if [ -z sound ]
+#then
+#sdl_libs=""
+#fi
 
 #set up compiler flags
 quig_outputname="quig"

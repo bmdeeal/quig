@@ -1,4 +1,18 @@
 --rain:dosage
+-- rain:dosage -- a "danmaku" style game where you have to survive various boss barrages
+-- rain:dosage is (C) 2020 B.M.Deeal. rain:dosage is distributed under the GPLv3.
+
+-- This file expects word-wrapping and a tab width of 4.
+
+--[[
+	This program is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+    See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this program.
+    If not, see <https://www.gnu.org/licenses/>.
+--]]
 
 
 
