@@ -42,10 +42,27 @@ If that link does not work, this one might:
 	https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0
 Under the heading "Visual Studio 2015, 2017 and 2019", download the file from the link marked "x86: vc_redist.x86.exe".
 
+===
+Installation on Windows:
+These instructions are specifically for Windows 10, although the process is similar on other versions.
+
+quig doesn't really need to be put anywhere special, although the .dll files must remain in the same folder as quig-for-windows.exe.
+Currently, the easiest way to set up quig is to associate .quig files with quig-for-windows.exe. 
+Right-click intro.quig, go to the 'Open with' menu, and select 'Choose another app'. Make sure the "Always use this app to open .quig files" box is checked. Then, go to More apps, and scroll all the way down to Look for another app on this PC. Navigate to where you downloaded quig, and select quig-for-windows.exe.
+
+Future versions of quig will provide an installer that does this for you.
+
+===
+Installation on Linux:
+quig requires SDL 2, SDL_Mixer 2.0, SDL_Image 2.0, and Lua 5.3 to be installed. On a Debian-based distro, running deps-debian.sh should install the needed dependencies.
+The package build-essential should also be installed.
+
+Run build.sh to compile quig. You can then move the quig binary to somewhere in your $PATH, such as /usr/local/bin.
+
+If your desktop environment supports it, you can associate .quig files with quig to run them by double-clicking them.
 
 ===
 Usage:
-
 In the future, this will be nicer. At the moment, it's a bit rough.
 
 quig provides a simple GUI for running games under Linux-based systems. The bash script run-quig.sh will allow you to graphically select a quig game and configure any options. The Windows GUI is currently unfinished.
@@ -55,11 +72,12 @@ On Raspbian, ($ is the prompt, don't type it!)
 	$ sudo apt install yad
 will install YAD if needed.
 It may run on other systems that provide YAD and bash. If you do not have YAD and bash installed or cannot install it (for example, on Windows), quig can be used as a command-line program.
-You may want to associate .quig files with quig-for-windows.exe on Windows systems, allowing you to simply double click to run games, although no options will be configurable for games run this way.
+
+As mentioned in the Windows installation section, you can directly associate .quig files with quig-for-windows.exe on Windows systems. This makes using quig as easy as just double-clicking a .quig file to run games, although you won't be able to enable fullscreen mode or change the drawing mode settings this way.
 
 From the command line, games can be run as follows:
 	$ quig mygame.quig
-if mygame.quig and mygame.png are together in the same folder.
+where myname is the name of the game, and mygame.quig and mygame.png are together in the same folder.
 If mygame.quig has no errors and mygame.png can be loaded, the game will start.
 
 quig currently supports three graphics configurations:
@@ -266,7 +284,7 @@ In the future, there might be a quig option that generates a simple texture for 
 Some musings:
 
 The first game I wrote with quig was astro-burst, and a lot of the feature set in quig was built around being able to create "pseudo-3D" sprite scaling games, similar to Sega's classic mid-80s/early-90s output.
-quig can't match them for resolution or detail due to its other goals, but it can deliver a sizzlingly fast experience with tons of graphics thrown on screen.
+quig can't match them for resolution or detail due to its other goals, but it can deliver a sizzlingly fast experience with tons of graphics thrown on screen, even on a machine like the Raspberry Pi 2.
 To keep things simple, there's no tilemap or anything. Everything on the screen is either text, a colored rectangle, or a sprite.
 
 astro-burst and pop.drop'n were developed as showcases for quig.
