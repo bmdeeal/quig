@@ -1,6 +1,6 @@
 /*
 	quig - quick lua game system
-	(C) 2020 B.M.Deeal
+	(C) 2020-2022 B.M.Deeal <brenden.deeal@gmail.com>
 	
 	This program is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation.
 
@@ -20,18 +20,20 @@
 	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
 	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
 	* proper analog stick direction check -- it is way too easy to hit diagonal inputs on accident, we should check based on the angle rather than just an x/y check
-	* the GIF saving needs to show progress or something lel
+	* the GIF saving needs to show progress or something (maybe? on my current desktop, it's entirely seamless, but I remember it pausing badly on my laptop and the Pi)
 	
 	per-version TODO:
-	for 1.1:
+	for 1.1-release:
+	* document audio playback and file saving, provide proper examples (in progress!)
+	
+	for 1.2-alpha:
 	* should refactor input handling, it's a mess and it doesn't need to be 
 	* really should give a look over the API so we don't do wild, breaking changes once we get to a not-beta release
 	  in particular, we should implement support for multiple controllers
 	  might just modify the API to take an optional controller parameter
-	* document audio playback and file saving, provide proper examples
 	* file reading/writing isn't particularly well tested at all
 	
-	for 1.2:
+	for 1.3:
 	* user configurable deadzone for analog stick
 	* really need to check on squcol, need to make an example game with it that needs actually precise collision
 	  I miiight have like an off-by-one error or something, dunno
@@ -41,25 +43,25 @@
 	  we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform)
 	  but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
 	
-	for 1.3:
+	for 1.4:
 	* spr_xys and squ_xys with separate x/y scale (VERY easy, just need to do it)
-	* hiragana text support -- the characters are in the font, but you just can't really access them nicely lol
+	* hiragana text support -- the characters are in the font, but you just can't really access them nicely
 	* user-adjustable screen scale
 	* selectable gif export length? or at least make it so that it can be ended early (eg, pressing select again)
 	* frame blending option during display (we do this during gif export, so it should be reasonable as a runtime option)
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
 	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this really
 	
-	for 1.4 and beyond:
+	for 1.5 and beyond:
 	* more examples (in-progress)
-	* a better frontend, or at least one that works on Windows without lots of configuration
+	* a better front-end, or at least one that works on Windows without lots of configuration (I am working on a project for Windows called ezLoadGUI, and I should probably provide a pre-configured version alongside quig)
 	* config file (eg, default video settings, etc)
 	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions
 	
 	other potential features:
 	* add blending layer?
 	* add perspective terrain drawing? think SNES Mode 7 or Saturn RBG0; this seems way out of scope for this project, but would really be pretty cool
-	* even if the "mode 7" layer didn't rotate, it would be cool to do anyway
+	* even if the "mode 7" layer didn't rotate, it would be cool to do anyway for skies or side-scrolling ground
 */
 ;
 
@@ -1065,13 +1067,14 @@ int c_stopsong(lua_State *LL) {
 	return 0;
 }
 
-
+//updateScreen -- 
 void updateScreen() {
+	//just blit the surface to the window in software modes
 	if (display_mode==DisplayMode::soft) {
 		SDL_BlitScaled(program_surface, NULL, window_surface, NULL);
 		SDL_UpdateWindowSurface(window);
 	}
-	//filthy hack that works
+	//filthy hack that works, generate a texture every frame from the surface
 	else {
 		SDL_Texture *scr = SDL_CreateTextureFromSurface(renderer, program_surface);
 		SDL_RenderCopy(renderer, scr, NULL, NULL);
