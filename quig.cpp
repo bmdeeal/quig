@@ -13,26 +13,35 @@
 	---
 	
 	other, major TODO:
-	* really should get this building on Windows with something other than MSYS2 so I don't need to distribute a gazillion DLLs -- quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
-	* audio should be a compile-time option
+	* really should get this building on Windows with something other than MSYS2 so I don't need to distribute a gazillion DLLs
+	  quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
+	  EDIT: we can build with Visual Studio now, although we don't build the dependencies ourselves
+	* audio should be a compile-time option, I think there was some work done on that
 	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
 	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
 	* proper analog stick direction check -- it is way too easy to hit diagonal inputs on accident, we should check based on the angle rather than just an x/y check
+	* the GIF saving needs to show progress or something lel
 	
 	per-version TODO:
-	for 0001:
+	for 1.1:
 	* should refactor input handling, it's a mess and it doesn't need to be 
 	* really should give a look over the API so we don't do wild, breaking changes once we get to a not-beta release
+	  in particular, we should implement support for multiple controllers
+	  might just modify the API to take an optional controller parameter
 	* document audio playback and file saving, provide proper examples
 	* file reading/writing isn't particularly well tested at all
 	
-	for 0002:
+	for 1.2:
 	* user configurable deadzone for analog stick
-	* really need to check on squcol, need to make an example game with it that needs actually precise collision, I miiight have like an off-by-one error or something, dunno
-	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course), or honestly just draw the backgrounds separately
-	* have quig go through a list of other supported formats for audio files -- we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform), but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
+	* really need to check on squcol, need to make an example game with it that needs actually precise collision
+	  I miiight have like an off-by-one error or something, dunno
+	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course)
+	  or honestly just draw the backgrounds separately
+	* have quig go through a list of other supported formats for audio files
+	  we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform)
+	  but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
 	
-	for 0003:
+	for 1.3:
 	* spr_xys and squ_xys with separate x/y scale (VERY easy, just need to do it)
 	* hiragana text support -- the characters are in the font, but you just can't really access them nicely lol
 	* user-adjustable screen scale
@@ -41,7 +50,7 @@
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
 	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this really
 	
-	for 0004 and beyond:
+	for 1.4 and beyond:
 	* more examples (in-progress)
 	* a better frontend, or at least one that works on Windows without lots of configuration
 	* config file (eg, default video settings, etc)
@@ -52,7 +61,7 @@
 	* add perspective terrain drawing? think SNES Mode 7 or Saturn RBG0; this seems way out of scope for this project, but would really be pretty cool
 	* even if the "mode 7" layer didn't rotate, it would be cool to do anyway
 */
-
+;
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -78,11 +87,11 @@ extern "C" {
 #include "quig.h"
 
 //constants
-const char *QUIG_VERSION="0001-beta2a";
+const char *QUIG_VERSION="1.1-beta2a"; //version string -- major.minor-status
 const int QUIG_DEBUG = 1; //TODO: compile script flag for this
-const int FPS_RATE = 60; //quig runs at a fixed 60fps
+const int FPS_RATE = 60; //quig runs at a fixed 60fps, period
 const int FPS_TICKS = (1000 / FPS_RATE);
-//screen res -- apparently it's slightly smaller than a GBA screen
+//screen res
 const int VIEW_WIDTH=240; //15 tiles, 30 characters
 const int VIEW_HEIGHT=144; //9 tiles, 18 characters
 
@@ -224,7 +233,8 @@ void setWindowScale(int s) {
 	window_height=(VIEW_HEIGHT*window_scale);
 }
 
-//quig isn't hardware accelerated (at all, even though it probably could/should be), but we do at least stretch the final screen size in hardware if asked to
+//quig isn't hardware accelerated (at all, even though it probably could/should be)
+//but we do at least stretch the final screen size in hardware if asked to
 //and doing that is required for vsync
 enum class DisplayMode {
 	soft, hard_novsync, hard_vsync
@@ -666,7 +676,7 @@ void cleanup() {
 
 //handle input -- 0 is not pressed, 1 is just pressed, 2 is held.
 //usually, you just want to check for >0 or ==1
-//this used to be the only thing holding input until controller handling was implemented, look at how small and clean it is
+//this used to be the only thing holding input until controller handling was implemented, look at how small and clean it is compared to the controller code
 struct Inputs {
 	static const int UP = 0;
 	static const int DOWN = 1;
@@ -943,7 +953,7 @@ int c_text(lua_State *LL) {
 
 //do_squcol -- check for two sprites/squares colliding 
 //TODO: proper testing for corner cases (eg, fractional scale+position) -- pop.drop'n doesn't really need actually precise collision, but a more ordinary platform game probably would
-//TODO: oh wait, this could be optimized to a point in rectangle check, since both objects are squares
+//TODO: this could be optimized to a point in rectangle check, since both objects are squares
 bool do_squcol(double x1, double y1, double s1, double x2, double y2, double s2) {
 	double left1, right1, top1, bottom1, offset1;
 	offset1 = 8*s1;
@@ -1293,7 +1303,7 @@ int main(int argc, char* argv[]) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "quig fatal error!", "Fatal error:\nCould not load graphics!", window);
 		return 1;
 	}
-	//magic pink is transparent
+	//magic pink (#FF00FF) is transparent
 	SDL_SetColorKey(sprites, SDL_TRUE, SDL_MapRGB(sprites->format, 0xFF, 0x00, 0xFF));
 	
 	//used to calculate fps
@@ -1335,6 +1345,9 @@ int main(int argc, char* argv[]) {
 			else if (e.type == SDL_KEYDOWN && e.key.repeat==0) {
 				switch (e.key.keysym.sym) {
 					//quit
+					//TODO: change this, or at least make quig ask to quit
+					//TODO: quig also needs a way to display its own info+take input, separate from the game
+					//half tempted to make this an input that the game can handle, but it just seems like pointless extra work on both our and game makers parts
 					case (SDLK_ESCAPE):
 						running = false;
 					break;
@@ -1348,7 +1361,7 @@ int main(int argc, char* argv[]) {
 						recording=true;
 					break;
 					//d-pad
-					//TODO: ijkl?
+					//TODO: ijkl? really, this should all just end up being remappable though
 					case (SDLK_UP):
 						if (inputs.keys[inputs.UP] == 0) {
 							inputs.keys[inputs.UP]=1;
@@ -1468,9 +1481,7 @@ int main(int argc, char* argv[]) {
 							}
 						}
 					break;
-					//B button (ostensibly, the one to the left/bottom, like on an NES controller)
-					//honestly, we really should just flip these around, we take like all xinput controllers and they're labeled exactly backwards to this
-					//gonna be a right pain fixing it for existing games though
+					//A button (the one on the bottom/left of the B-button)
 					case (SDLK_z):
 					case (SDLK_s):
 					case (SDLK_q):
@@ -1483,7 +1494,7 @@ int main(int argc, char* argv[]) {
 							}
 						}
 					break;
-					//A button (ostensibly, the one to the right)
+					//B button (the one to the right of the A-button)
 					case (SDLK_x):
 					case (SDLK_a):
 					case (SDLK_w):
@@ -1550,6 +1561,7 @@ int main(int argc, char* argv[]) {
 		
 		//save a screenshot if requested
 		//TODO: numbering, so the user can take multiple shots and decide the best one
+		//or maybe just timestamps, which saves a lot of effort
 		if (sshot) {
 			IMG_SavePNG(program_surface,"quig-sshot.png");
 		}

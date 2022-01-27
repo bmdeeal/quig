@@ -1,26 +1,35 @@
 --sound test
 --quick music playback demo
 
+
 function init()
 end
 
+song_id=0
+song_max=30
+message="Select a song..."
+
 function step()
 	cls(64,64,64)
-	text("sound test",0,0,1,0)
+	text("[sound test]\nUse left/right to select.\nPress (a) to start the song.\nPress (b) to stop.\nSelected song: " .. song_id,0,0,1,0)
+	text(message,0,view_height-16,1,1)
 	if (key(key_a)==1) then
-		loopsong(0)
+		loopsong(song_id)
+		message="Attempting to play\n'sound-test.song" .. song_id .. ".mp3'..." 
 	end
 	if (key(key_b)==1) then
-		loopsong(1)
-	end
-	if (key(key_start)==1) then
 		stopsong()
+		message="Song stopped."
 	end
-	if (key(key_up)==1) then
-		playsound(0,0)
+	if (key(key_right)==1) then
+		if (song_id<song_max) then
+			song_id=song_id+1
+		end
 	end
-	if (key(key_down)==1) then
-		playsound(1,1)
+	if (key(key_left)==1) then
+		if (song_id>0) then
+			song_id=song_id-1
+		end
 	end
 	
 end
