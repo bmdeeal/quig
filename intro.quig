@@ -1,13 +1,19 @@
+--2022 B.M.Deeal
+--intro.quig - a simple demo game for a user to make sure if quig is working
+--a little over-complicated for an introductory demo, but at the same time, this is likely to be the first thing a quig user sees.
+--this wasn't going to be a game at all, but I couldn't resist
 
---background stuff
-current={r=128, g=128, b=128}
-target={r=128, g=128, b=128}
-width=68 --how far to change the colors from the center color
-speed=0.25 --how much to change the color by every frame
-center=72 --the center color
+--notice: in later versions of quig, this will likely not work due to the removal of access to Lua's os library (although it is possible that specific functions like os.time might be added)
+--however, as of this writing, this is the only way to randomize the game immediately on startup (other options could be to randomize it based on how many frames have been passed before a button press)
+math.randomseed(os.time())
+
+--switches sign every frame
+flip=1
+--is the game paused?
+paused=false
 
 --get the sign of a number, either negative, positive, or zero
---this really should have been in Lua's standard math library
+--this really should have been in Lua's standard math library, but Lua makes a lot of odd decisions (I'm still baffled at the lack of a continue statement in Lua loops)
 function sign(n)
 	if n>0 then
 		return 1
@@ -18,7 +24,104 @@ function sign(n)
 	end
 end
 
+--draw text with a drop shadow
+function shadowtext(s,x,y)
+	text(s,x+1,y+1,1,2)
+	text(s,x,y,1,3)
+end
+
+--globals (this probably should go in a table, eg colors.width, might refactor)
+width=68 --how far to change the colors from the center color
+speed=0.25 --how much to change the color by every frame
+center=72 --the center color
+
+--generate random colors
+function makeColor()
+	return math.random(center-width,center+width)
+end
+
+--background color stuff
+--this ends up being used by a lot of other things
+current={r=128, g=128, b=128} --current background color
+target={r=makeColor(), g=makeColor(), b=makeColor()} --target to change to
+
+--smoothly change the background color to random ones
+--it really feels like there should be a less repeating way to do this
+current.update=function(self)
+	--slowly change red to the target color
+	if self.r>target.r then
+		self.r=self.r-speed
+	elseif self.r<target.r then
+		self.r=self.r+speed
+	--and generate a new target if we reach it
+	elseif self.r==target.r then
+		target.r=makeColor()
+	end
+	--same for green
+	if self.g>target.g then
+		self.g=self.g-speed
+	elseif self.g<target.g then
+		self.g=self.g+speed
+	elseif self.g==target.g then
+		target.g=makeColor()
+	end
+	--and for blue
+	if self.b>target.b then
+		self.b=self.b-speed
+	elseif self.b<target.b then
+		self.b=self.b+speed
+	elseif self.b==target.b then
+		target.b=makeColor()
+	end
+end
+
+particles={
+	limit=48,
+	gravity=0.1
+}
+particles.init=function(self)
+	for ii=1,self.limit do
+		self[ii]={
+			active=0,
+			xd=0,
+			yd=0,
+		}
+	end
+end
+particles.update=function(self)
+	for ii=1,self.limit do
+		if self[ii].active>0 then
+			self[ii].active=self[ii].active-1
+			self[ii].yd=self[ii].yd+self.gravity
+			self[ii].x=self[ii].x+self[ii].xd
+			self[ii].y=self[ii].y+self[ii].yd
+		end
+	end
+end
+particles.draw=function(self)
+	for ii=1,self.limit do
+		if self[ii].active>0 then
+			squ(self[ii].x, self[ii].y, 0.25, current.r+10, current.g+10, current.b+10)
+		end
+	end
+end
+particles.add=function(self,x,y,xd,yd,active)
+	for ii=1,self.limit do
+		if self[ii].active==0 then
+			self[ii].active=active
+			self[ii].xd=xd
+			self[ii].yd=yd
+			self[ii].x=x
+			self[ii].y=y
+			return
+		end
+	end
+end
+particles.add_easy=function(self,x,y)
+	self:add(x,y,(math.random()-0.5)*4, (math.random()-0.5)*4, math.random(30,60))
+end
 --a small player object you can move around
+--this holds way more data than it should
 player={
 	--position
 	x=view_width/2,
@@ -27,18 +130,68 @@ player={
 	xd=0,
 	yd=0,
 	--top speed for each direction
-	maxspeed_x=1.5,
+	maxspeed_x=1.75,
 	maxspeed_y=4,
 	--physics
-	friction=0.1, --how much to slow down
-	accel=0.2, --how much to speed up by during input
-	gravity=0.2, --how quickly do you fall
-	jump=3, --how high to jump
+	friction=0.1, --how much to slow down horizontally
+	accel=0.2, --horizontal acceleration during input (has to overcome friction)
+	gravity=0.2, --falling acceleration
+	jump=3, --how high to jump (did consider variable height jumps, but decided not to)
 	--floor stuff
 	ground=false, --are we on the ground?
-	ground_level=view_height-16, --how high/low is the ground
-	ground_width=96 -- how wide is the ground area
+	jump_ok=0, --can we jump? (this was originally just based on ground being true, but you can jump after collecting a pickup)
+	ground_level=view_height-16, --where on screen is the ground positioned
+	ground_width=96, --how wide the ground area is
+	score=0, --how many pickups collected
+	top_score=0 --best pickup collection
 }
+
+--item to pickup
+pickup={
+	--position
+	x=view_width/2,
+	y=player.ground_level-32,
+	--cooldown timer
+	timer=0,
+	timer_max=20
+}
+
+--reposition the pickup and set the cooldown timer
+pickup.init=function(self)
+	self.x=math.random(view_width/2-player.ground_width/2+4,	view_width/2+player.ground_width/2-4)
+	self.y=player.ground_level-32+math.random(0,8)
+	self.timer=self.timer_max
+end
+
+--draw the pickup object
+pickup.draw=function(self)
+	--only display the item if not in the cooldown period
+	if self.timer <= 0 then
+		local offset=math.random(-20,5) --offset from the background color
+		squ(self.x, self.y, 0.5, math.max(0,current.r-offset), math.max(0,current.g-offset), math.max(0,current.b-offset))
+	end
+		
+end
+
+--update the pickup object
+pickup.update=function(self)
+	--either we're in the cooldown period, or we're just checking whether the item has been collected
+	if self.timer > 0 then
+		self.timer=self.timer-1
+	else
+		if squcol(self.x,self.y,0.5, player.x,player.y,1) then
+			for ii=1,10 do
+				particles:add_easy(self.x,self.y)
+			end
+			self:init()
+			player.score=player.score+1
+			player.jump_ok=player.jump_ok+1
+			if player.yd>-3 then
+				player.yd=-3
+			end
+		end
+	end
+end
 
 --update the player object
 player.update=function(self)
@@ -55,8 +208,9 @@ player.update=function(self)
 		self.xd=self.xd+self.accel
 	end
 	--jumping
-	if self.ground==true and key(key_a)==1 then
+	if self.jump_ok>0 and key(key_a)==1 then
 		self.yd=-self.jump
+		self.jump_ok=self.jump_ok-1
 	end
 	--limit the player's speed
 	if self.xd>self.maxspeed_x then self.xd=self.maxspeed_x end
@@ -71,6 +225,11 @@ player.update=function(self)
 		self.y=self.ground_level-8
 		self.yd=0
 		self.ground=true
+		self.jump_ok=2
+		if self.score>self.top_score then
+			self.top_score=self.score
+		end
+		self.score=0
 	else
 		self.ground=false
 	end
@@ -93,42 +252,21 @@ player.draw=function(self)
 	squ(self.x, self.y, 1, math.max(0,current.r-20),math.max(0,current.g-20),math.max(0,current.b-20))
 	--draw the floor in a similar manner
 	rect(view_width/2-self.ground_width/2, self.ground_level, self.ground_width, 4, math.max(0,current.r-40),math.max(0,current.g-40),math.max(0,current.b-40))
+	local jump_txt=""
+	for ii=1,player.jump_ok do
+	jump_txt=jump_txt.."*"
+	end
+	--draw the score+info
+	text(jump_txt.."\nhs:"..player.top_score.."\nsc:"..player.score,0,view_height-24,1,2)
 end
 
---smoothly change the background color to random ones
-current.update=function(self)
-	if self.r>target.r then
-		self.r=self.r-speed
-	elseif self.r<target.r then
-		self.r=self.r+speed
-	elseif self.r==target.r then
-		target.r=math.random(center-width,center+width)
-	end
-	if self.g>target.g then
-		self.g=self.g-speed
-	elseif self.g<target.g then
-		self.g=self.g+speed
-	elseif self.g==target.g then
-		target.g=math.random(center-width,center+width)
-	end
-	if self.b>target.b then
-		self.b=self.b-speed
-	elseif self.b<target.b then
-		self.b=self.b+speed
-	elseif self.b==target.b then
-		target.b=math.random(center-width,center+width)
-	end
-end
-
+--initialize "everything"
 function init()
+	pickup:init()
+	particles:init()
 end
 
---draw text with a drop shadow
-function shadowtext(s,x,y)
-	text(s,x+1,y+1,1,2)
-	text(s,x,y,1,3)
-end
-
+--runs every frame
 function step()
 	--change the background color slowly
 	cls(current.r,current.g,current.b)
@@ -149,11 +287,32 @@ function step()
 		local brighten_b=math.min(255,current.b+ii*change_amount)
 		rect(0, view_height-(steps-ii)*block_size, view_width, block_size, brighten_r, brighten_g, brighten_b)
 	end
-	--update the background color
-	current:update()
-	--draw the intro message
-	shadowtext("Welcome to quig!\n\nTry some of the example games\nin the examples folder, or\ncreate your own.\n\nTo learn how to make your own\ngames, read get-the-dot.txt.\n\nHave fun!\n--B.M.Deeal",0,0)
-	--update and draw the player
-	player:update()
+	
+	--update everything, assuming the game isn't paused
+	if not paused then
+		current:update()
+		player:update()
+		pickup:update()
+		particles:update()
+	else
+		text("paused!",view_width-8*7,view_height-8,1,0)
+	end
+	
+	--let the player pause
+	if key(key_start)==1 then
+		paused=not paused
+	end
+	
+	--draw everything
+	if flip>0 then
+		particles:draw()
+	end
+	pickup:draw()
 	player:draw()
+	--draw the intro message
+	--you can (and should) comment this out once you've seen it, so you can enjoy the game on its own
+	shadowtext("Welcome to quig!\n\nTry some of the example games\n(like this one!), or create\nyour own.\n\nFor a tutorial on using quig,\nread get-the-dot.txt.\n\nHave fun!\n--B.M.Deeal",0,0)
+	--update the flip (for the particles, but also anything that happens every other frame)
+	flip=-flip
+	
 end
