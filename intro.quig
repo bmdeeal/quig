@@ -3,6 +3,22 @@
 --a little over-complicated for an introductory demo, but at the same time, this is likely to be the first thing a quig user sees.
 --this wasn't going to be a game at all, but I couldn't resist
 
+--[[
+how to play:
+* button-a: jump (can do in mid-air)
+* button-b: toggle intro text
+* left/right: move
+
+Break the boxes without touching the ground!
+Every time you break a box, you bounce off and gain an extra jump.
+The stars on the left side of the screen represent how many jumps you have.
+
+Beneath the number of jumps you have remaining is your high score (hs) and previous score (ps).
+
+--]]
+
+
+
 --notice: in later versions of quig, this will likely not work due to the removal of access to Lua's os library (although it is possible that specific functions like os.time might be added)
 --however, as of this writing, this is the only way to randomize the game immediately on startup (other options could be to randomize it based on how many frames have been passed before a button press)
 math.randomseed(os.time())
@@ -11,6 +27,8 @@ math.randomseed(os.time())
 flip=1
 --is the game paused?
 paused=false
+--are we seeing the message
+showmsg=true
 
 --get the sign of a number, either negative, positive, or zero
 --this really should have been in Lua's standard math library, but Lua makes a lot of odd decisions (I'm still baffled at the lack of a continue statement in Lua loops)
@@ -143,7 +161,10 @@ player={
 	ground_level=view_height-16, --where on screen is the ground positioned
 	ground_width=96, --how wide the ground area is
 	score=0, --how many pickups collected
-	top_score=0 --best pickup collection
+	top_score=0, --best pickup collection
+	prev_score=0, --how many you got last time
+	vshake=0, --how much to shake the screen
+	vshake_max=2 --amount to shake the screen by
 }
 
 --item to pickup
@@ -168,7 +189,7 @@ pickup.draw=function(self)
 	--only display the item if not in the cooldown period
 	if self.timer <= 0 then
 		local offset=math.random(-20,5) --offset from the background color
-		squ(self.x, self.y, 0.5, math.max(0,current.r-offset), math.max(0,current.g-offset), math.max(0,current.b-offset))
+		squ(self.x, self.y+player.vshake*flip, 0.5, math.max(0,current.r-offset), math.max(0,current.g-offset), math.max(0,current.b-offset))
 	end
 		
 end
@@ -224,6 +245,12 @@ player.update=function(self)
 	if self.y>self.ground_level-8 then
 		self.y=self.ground_level-8
 		self.yd=0
+		if not self.ground then
+			self.prev_score=self.score
+		end
+		if self.ground==false then
+			self.vshake=self.vshake_max
+		end
 		self.ground=true
 		self.jump_ok=2
 		if self.score>self.top_score then
@@ -244,20 +271,32 @@ player.update=function(self)
 		self.xd=0
 		self.x=wallpos_l
 	end
+	if self.vshake>0 then
+		self.vshake=self.vshake-0.125
+	end
 end
 
 --draw the player and ground
 player.draw=function(self)
+	--shake amount
+	local shake=self.vshake*flip
 	--the player is just the background color darkened, clamped to 0 (if you don't clamp it after subtracting, colors will wrap around from dark to bright)
-	squ(self.x, self.y, 1, math.max(0,current.r-20),math.max(0,current.g-20),math.max(0,current.b-20))
+	squ(self.x, self.y+shake, 1, math.max(0,current.r-20),math.max(0,current.g-20),math.max(0,current.b-20))
 	--draw the floor in a similar manner
-	rect(view_width/2-self.ground_width/2, self.ground_level, self.ground_width, 4, math.max(0,current.r-40),math.max(0,current.g-40),math.max(0,current.b-40))
+	rect(view_width/2-self.ground_width/2, self.ground_level+shake, self.ground_width, 4, math.max(0,current.r-40),math.max(0,current.g-40),math.max(0,current.b-40))
 	local jump_txt=""
 	for ii=1,player.jump_ok do
 	jump_txt=jump_txt.."*"
 	end
 	--draw the score+info
-	text(jump_txt.."\nhs:"..player.top_score.."\nsc:"..player.score,0,view_height-24,1,2)
+	text(
+		jump_txt..
+		"\nhs:"..self.top_score..
+		"\nps:"..self.prev_score,
+		0,view_height-24,1,2
+	)
+	local score_txt="sc:"..self.score
+	text(score_txt, view_width/2-(string.len(score_txt)*8)/2, self.ground_level+6,1,2)
 end
 
 --initialize "everything"
@@ -294,6 +333,9 @@ function step()
 		player:update()
 		pickup:update()
 		particles:update()
+		if key(key_b)==1 then
+			showmsg=not showmsg
+		end
 	else
 		text("paused!",view_width-8*7,view_height-8,1,0)
 	end
@@ -311,8 +353,11 @@ function step()
 	player:draw()
 	--draw the intro message
 	--you can (and should) comment this out once you've seen it, so you can enjoy the game on its own
-	shadowtext("Welcome to quig!\n\nTry some of the example games\n(like this one!), or create\nyour own.\n\nFor a tutorial on using quig,\nread get-the-dot.txt.\n\nHave fun!\n--B.M.Deeal",0,0)
-	--update the flip (for the particles, but also anything that happens every other frame)
-	flip=-flip
-	
+	if showmsg then
+		shadowtext("Welcome to quig!\n\nTry some of the example games\n(like this one!), or create\nyour own.\n\nFor a tutorial on using quig,\nread get-the-dot.txt.\n\nHave fun!\n--B.M.Deeal",0,0)
+	end
+	if not paused then
+		--update the flip (for the particles, but also anything that happens every other frame)
+		flip=-flip
+	end
 end

@@ -1,5 +1,5 @@
 -- astro-burst -- a simple time-attack space driving game for quig
--- astro-burst is (C) 2020 B.M.Deeal. astro-burst is distributed under the GPLv3.
+-- astro-burst is (C) 2020-2022 B.M.Deeal. astro-burst is distributed under the GPLv3.
 
 -- This file expects word-wrapping and a tab width of 4.
 
@@ -29,11 +29,11 @@
 	
 	-how to play-
 	Steer the spaceship through the gates with the d-pad. As you drive, you will encounter several gates with icons above them. These gates affect your ship in different ways:
-	* Checkpoint -- Every checkpoint gate you pass through gives you a little bit more time before you are disqualified.
+	* Checkpoint -- Every checkpoint gate you pass through gives you a little bit more time, keeping you just that much further from being disqualified.
 	* Ice -- Your ship will move a bit faster, but your controls are also far more sensitive. Exciting, but also dangerous. It's quite hard to recover when on ice, because your turning is very, very sensitive.
 	* Slow -- Your ship will slow down quite a bit. You can't avoid it, so it can even help you take particularly hard corners... but in some cases, you might find yourself turning too hard as you pass through it and be sent flying off!
 	* Magnet -- Your ship will be attracted away from the center. Stay near the center line to avoid or reduce the effect, and correct your course as needed.
-	* Goal -- The end! Passing through a goal gate ends the course and displays your score and time. Make some records and then smash through them!
+	* Goal -- Passing through a goal gate ends the course and displays your score and time. Make some records and then smash through them!
 	
 	-scoring-
 	Scoring boils down to how well you can follow the dotted line in the middle.
@@ -75,7 +75,8 @@ function makeSpeedTable()
 		{name="basic"},
 		{name="normal"},
 		{name="turbo"},
-		{name="maniac"}
+		{name="maniac"},
+		{name="absurd"} --this was once called unfair, but I decided to make it more fun to play; TODO: make unlockable after you've cleared all 8 courses on any difficulty
 	}
 end
 sc=makeSpeedTable()
@@ -85,6 +86,7 @@ sc[2].accel=0.009
 sc[3].accel=0.010 --normal
 sc[4].accel=0.011
 sc[5].accel=0.0135 --maniac
+sc[6].accel=0.0250 --absurd
 
 --background colors for each speed class
 --wanted them to be wildly different hues, but it didn't really look right
@@ -94,6 +96,7 @@ sc[2].bg={r=4,  g=4,  b=25}
 sc[3].bg={r=6,  g=6,  b=24}
 sc[4].bg={r=7,  g=6,  b=20}
 sc[5].bg={r=6,  g=4,  b=16}
+sc[6].bg={r=50,  g=10,  b=20}
 
 --holds how much time you get at the start
 sc[1].time=40
@@ -101,6 +104,7 @@ sc[2].time=30
 sc[3].time=20
 sc[4].time=18
 sc[5].time=17
+sc[6].time=15
 --holds how much time passing a checkpoint gate gives you
 time_bonuses=makeSpeedTable()
 time_bonuses[1].time=28
@@ -108,14 +112,18 @@ time_bonuses[2].time=25
 time_bonuses[3].time=22
 time_bonuses[4].time=21
 time_bonuses[5].time=20
+time_bonuses[6].time=17
 --save best times/scores
 best_times=makeSpeedTable()
 best_scores=makeSpeedTable()
 
 --far background
+--TODO: should probably set a defined random seed to make the stars stay the same for each individual stage
 stars={}
 stars.init=function()
 	stars.max=10
+	stars.offset_x=0
+	stars.offset_y=0
 	for ii=1,stars.max do
 		stars[ii]={}
 		stars[ii].x=math.random(view_width)
@@ -127,7 +135,7 @@ end
 --slap some stars on screen
 stars.draw=function()
 	for ii=1,stars.max do
-		spr(stars[ii].x, stars[ii].y, stars[ii].scale, stars[ii].t, 0)
+		spr(stars[ii].x+stars.offset_x, stars[ii].y+stars.offset_y, stars[ii].scale, stars[ii].t, 0)
 	end
 end
 
@@ -138,7 +146,7 @@ camera.init=function()
 	camera.y=-400
 	camera.cx=view_width/2
 	camera.cy=view_height/2
-	camera.fov=16
+	camera.fov=16 --this isn't exactly FOV proper, so don't mess with it
 	camera.near=0.5
 end
 
@@ -611,7 +619,7 @@ end
 --move objects forward to the player, the player gets to stay still
 objects.update=function()
 	table.sort(objects,objects.cmp)
-	--local inactive_count=0
+	--local inactive_count=0 --debug counter to check object usage
 	for ii=1,objects.max do
 		if objects[ii].active==1 then
 			objects[ii].z=objects[ii].z-player.speed
@@ -645,7 +653,7 @@ objects.update=function()
 				objects[ii].passed=true
 			end
 		--else
-		--	inactive_count=inactive_count+1
+			--inactive_count=inactive_count+1
 		end
 	end
 	--print(inactive_count)
@@ -653,21 +661,32 @@ end
 
 --draw the side-barriers
 --this feels like it should be slow, but there really isn't ever that much on screen
+--still, it probably could be heavily, heavily optimized (in particular, we constantly re-divide for the scale, but I'm not touching that right now)
 objects.draw=function()
 	--table.sort(objects,objects.cmp)
 	for ii=1,objects.max do
 		if objects[ii].active==1 then
 			local rx,ry,rs
-			--draw left side
-			rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y,objects[ii].z)
-			spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
-			rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y+500*flip,objects[ii].z)
-			squ(rx,ry,rs,177,62,83)
-			--draw right side
-			rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y, objects[ii].z)
-			spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
-			rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y+500*(-flip), objects[ii].z)
-			squ(rx,ry,rs,56,183,100)
+			if objects[ii].z<=220 then
+				--draw left side
+				rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y,objects[ii].z)
+				--shake on the highest speed class
+				if speed_class==6 and t%3==0 then
+					rs=rs*(1+math.random()*0.35)
+				end
+				spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
+				rx,ry,rs=camera.get2D(objects[ii].x-objects[ii].width,objects[ii].y+500*flip,objects[ii].z)
+				squ(rx,ry,rs,177,62,83)
+				--draw right side
+				rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y, objects[ii].z)
+				--shake on the highest speed class
+				if speed_class==6 and t%3==0 then
+					rs=rs*(1+math.random()*0.35)
+				end
+				spr(rx,ry,rs*3,objects[ii].tx,objects[ii].ty)
+				rx,ry,rs=camera.get2D(objects[ii].x+objects[ii].width, objects[ii].y+500*(-flip), objects[ii].z)
+				squ(rx,ry,rs,56,183,100)
+			end
 			--draw middle
 			if objects[ii].odd<0 then
 				rx,ry,rs=camera.get2D(objects[ii].x, objects[ii].y+1000,objects[ii].z)
@@ -697,7 +716,7 @@ objects.add=function(offset, width, flag)
 			objects[ii].active=1
 			objects[ii].x=offset
 			objects[ii].y=200
-			objects[ii].z=200
+			objects[ii].z=280 --adjust this to adjust draw distance?
 			objects[ii].width=width
 			objects[ii].passed=false
 			objects[ii].tx=1
@@ -774,6 +793,7 @@ player.init=function()
 	player.maxspeed_normal[3]=4
 	player.maxspeed_normal[4]=4.75
 	player.maxspeed_normal[5]=5.5
+	player.maxspeed_normal[6]=6.75
 	player.maxspeed=player.maxspeed_normal
 	player.speedaccel=sc[speed_class].accel --how fast to accelerate
 	player.speedfriction=0.03 --how fast to slow down
@@ -920,6 +940,10 @@ player.draw = function()
 	local rx,ry,rs=camera.get2D(player.x,0,player.z)
 	local anim=0
 	if (t%7 >5) then anim=1 end
+	--shake when near max speed
+	if player.speed > player.maxspeed_normal[speed_class]*0.95 and t%2==0 then
+		ry=ry+1
+	end
 	spr(rx,ry,rs,0,anim)
 end
 
@@ -988,6 +1012,8 @@ function step()
 	flip=-flip
 end
 
+--switch to the next attract segment
+--c is the index, g is the gap
 gmode.attract.go=function(c,g)
 	local this=gmode.attract
 	this.current=c
@@ -1000,32 +1026,118 @@ gmode.attract.go=function(c,g)
 end
 
 --attract sequence
---TODO: finish, have play every ___ seconds on the title screen
+--TODO: still not 100% certain on how it looks, but it's there
 gmode.attract.init=function()
 	local this=gmode.attract
 	this.section={}
 	this.section[1]=function()
-		text("high\nspeed\nspace\nrace",0,0,4,0)
+		local tpos={}
+		stars.offset_x=this.time/10
+		stars.offset_y=this.time/5
+		stars.draw()
+		tpos[1]=math.max(0,view_width-this.time*30)
+		tpos[2]=math.max(0,view_width+16-this.time*25)
+		tpos[3]=math.max(0,view_width+32-this.time*20)
+		tpos[4]=math.max(0,view_width+48-this.time*15)
+		text("high",tpos[1],0,4,0)
+		text("speed",tpos[2],8*4,4,0)
+		text("space",tpos[3],8*4*2,4,0)
+		text("race",tpos[4],8*4*3,4,0)
 	end
 	this.section[2]=function()
-		text("beat the clock! beat the clock! beat the clock!", -this.time,8,3,0)
+		player.speed=9
+		if t%2==0 then
+			objects.add(0,600+this.time*20,0)
+		end
+		camera.x=math.random(-30,30)
+		--rect(0,0,view_width,view_height,0,0,this.time/2)
+		cls(this.time*0.8,4,12)
+		objects.update()
+		objects.draw()
+		--spr(view_width/2+math.random(-4,4),view_height/2+math.random(-4,4)-48,2.5+math.sin(this.time/10+0.2),2,0)
+		text("beat the clock! beat the clock! beat the clock! beat the clock!", -this.time*4,view_height/2-32,3,0)
+		local bwflash=1
+		if this.time%40>=20 then bwflash=0 end
+		text("beat the clock! beat the clock! beat the clock! beat the clock!",this.time*2-228,view_height/2-32-8,1,bwflash)
 	end
 	this.section[3]=function()
-		text("fastest\nin\nthe\ngalaxy",0,0,4,0)
+		if this.time==0 then
+			stars.init()
+		end
+		stars.draw()
+		if this.time>5 then
+			text("fastest",0,0+8,4,1)
+		end
+		if this.time>20 then
+			text("in",0,8*4+8,4,0)
+		end
+		if this.time>35 then
+			text("the",0,8*4*2+8,4,0)
+		end
+		if this.time>50 then
+			text("galaxy",0,8*4*3+8,4,0)
+		end
+		if this.time>80 then
+			this.time=99
+		end
+		stars.offset_x=stars.offset_x-0.5
+		stars.offset_y=stars.offset_y+1
+		
 	end
 	this.section[4]=function()
-		text("get ready for\n(todo: finish this sequence)",0,0,1,1)
+		local cur_str=""
+		local cur_mode=0
+		local rng_pow=1
+		--local bg_lvl=math.max(0,255-this.time*2)
+		--cls(bg_lvl,bg_lvl,bg_lvl)
+		cls(255,255,255)
+		if this.time>5 and this.time<20 then
+			cur_str="get"
+			cur_mode=1
+			rng_pow=2
+			--text("get", view_width/2-(8*3*5)/2,view_height/2-(8*5)/2, 5,1)
+		end
+		if this.time>=20 and this.time < 35 then
+			cur_str="ready"
+			cur_mode=0
+			rng_pow=2
+			--text("ready",view_width/2-(8*5*5)/2,view_height/2-(8*5)/2,5,0)
+		end
+		if this.time>=35 then
+			cls(0,0,0)
+			cur_str="for"
+			cur_mode=1
+			rng_pow=3
+			--text("for",view_width/2-(8*3*5)/2,view_height/2-(8*5)/2,5,0)
+		end
+		text(
+			cur_str,
+			view_width/2-(8*string.len(cur_str)*5)/2+math.random(-rng_pow,rng_pow),
+			view_height/2-(8*5)/2+math.random(-4,4),
+			5,
+			cur_mode
+		)
+		if this.time>50 then
+			this.time=99
+		end
 	end
 	this.section[5]=function()
 		gmode.set(gmode.title)
 		return
 	end
 	
+	player.init()
+	camera.init()
+	objects.init()
+	particles.init()
+	stars.init()
+	
 	this.current=1
 	this.gap=0
 	this.time=0
 	this.go(1)
 end
+--run each attract screen segment
 gmode.attract.step=function()
 	local this=gmode.attract
 	if this.gap>0 then
@@ -1056,6 +1168,10 @@ end
 gmode.title.step=function()
 	--start game
 	--TODO: this should have three options, start, settings, and how to play
+	if t>60*15 then
+		gmode.set(gmode.attract)
+		return
+	end
 	if key(key_start)==1 then
 		gmode.set(gmode.stage_select)
 		return
@@ -1080,7 +1196,7 @@ gmode.title.step=function()
 	rect(0,0,16,16,255,255,255) --fixes a weird glitch with the text, I need to look into what's happening, could be the result of SDL2's software scaling being a bit bugged with clipping around the edges
 	--labels
 	text("astro-burst astro-burst astro-burst astro-burst ",-15*12-((t//4)%(16*12)),0,2,0)
-	text("2020 B.M.Deeal\n-beta version-",0,16,1,1)
+	text("2022 B.M.Deeal\n-beta version-",0,16,1,1)
 	--flashing start text
 	--TODO: this should be a menu
 	if t%60 > 12 then
@@ -1400,7 +1516,7 @@ end
 gmode.warning.step=function()
 	cls(50,50,50)
 	text("Welcome to astro-burst!",0,0,1,0)
-	text("\n(C) 2020 B.M.Deeal\nLicensed under GPLv3.\n\n---\n\n\n\nThis game features flickering\nlights.\nPlayer discretion is advised.",0,8,1,3)
+	text("\n(C) 2022 B.M.Deeal\nLicensed under GPLv3.\n\n---\n\n\n\nThis game features flickering\nlights.\nPlayer discretion is advised.",0,8,1,3)
 	text("\nPhotosensitivity warning:",0,8*6,1,0)
 	text("press start to play...",0,view_height-8,1,1)
 	if key(key_start)==1 then
@@ -1467,12 +1583,16 @@ gmode.stage_select.step=function()
 			this.classgrow=1.5
 		end
 	elseif key(key_down)==1 then --faster
-		if speed_class < 5 then
+		if speed_class < 6 then
 			speed_class=speed_class+1
 			this.classgrow=2
 		else
 			this.classgrow=1.5
 		end
+	end
+	--crazy shaking on absurd
+	if speed_class==6 and this.classgrow<1.4 then
+		this.classgrow=math.min(3, this.classgrow+math.random()*0.065)
 	end
 	
 	--pick stage, have it slide in smoothly
@@ -1527,12 +1647,12 @@ gmode.stage_select.step=function()
 	end
 	--TODO: this is only for testing, really should remove this at some point
 	--debug stage
-	if key(key_start)==1 then
-		this.selection=0
-		levels.create[this.selection]()
-		gmode.set(gmode.ingame)
-		return
-	end
+	--if key(key_start)==1 then
+	--	this.selection=0
+	--	levels.create[this.selection]()
+	--	gmode.set(gmode.ingame)
+	--	return
+	--end
 	--return to title
 	if key(key_b)==1 then
 		gmode.set(gmode.title)
