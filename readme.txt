@@ -14,15 +14,15 @@ Several of the example files are under the GPLv3, several are under CC0 (effecti
 ===
 About:
 
-quig is a very simple program designed to let you quickly and easily make small games with Lua. The various limitations found in quig are largely designed to keep the process simple and easy -- low resolution to reduce the focus on graphics, few buttons to encourage pick-up-and-play titles, and a small command set that contains the essentials of what is needed to make a game.
+quig is a simple program designed to let you quickly and easily make small games with Lua. The various limitations found in quig are largely designed to keep the process simple and easy -- low resolution to reduce the focus on graphics, few buttons to encourage pick-up-and-play titles, and a small command set that contains the essentials of what is needed to make a game.
 
 A simple tutorial showing how to get started and create a simple game is provided. See get-the-dot.txt for details.
 
-At the moment, quig isn't really a fantasy console or anything.
+At the moment, quig isn't really a fantasy console or anything (like TIC-80 or PICO-8), all editing is done with separate text editors and graphics editors.
 In addition, it's maybe a bit too simple, and the lack of integrated editors (in particular, for graphics) really does make it less than obvious to get started with vs other Lua-based game making systems, but it's still not too hard. Draw some graphics, write some code, play. 
 
 Games are drawn to a true-color 240x144 canvas that gets scaled up. Sprites are loaded from a truecolor .PNG file and have no color restrictions (except for the color #FF00FF, which is used as transparency and will not be drawn).
-quig updates at 60hz. However, in software mode or without vsync enabled, quig has been observed to update as quickly as 62hz on some systems.
+quig updates at a fixed 60hz. However, in software mode or without vsync enabled, quig has been observed to update as quickly as 62hz on some systems.
 
 Games for quig are comprised of two files, a graphics file (just a plain 128x128 PNG image containing 16x16 tiles) and a Lua source file.
 For example, my-game.quig would contain the Lua source and my-game.png would contain the graphics.
@@ -31,9 +31,11 @@ For example, my-game.quig would contain the Lua source and my-game.png would con
 System requirements:
 
 quig has been tested under Raspbian Linux and Windows 10 (via MSYS2 and a VS2019 build).
-quig requires SDL2, SDL_image, SDL_mixer, and Lua 5.3. In addition, the GUI launcher requires YAD and bash (so it currently is not known to run on Windows).
+quig requires SDL2, SDL_image, SDL_mixer, and Lua 5.3 to be installed on Linux; the Windows build provides its own copies of them.
+On Windows systems, the scripts run-quig.bat and run-quig.ps1 are provided to make it easier to run games with quig. These scripts require PowerShell to be installed to work.
+On Linux systems, the script run-quig.sh is similar, if more featureful. It requires Bash and YAD to be installed.
 quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops in the example game astro-burst.
-quig was initially developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution there. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
+quig was originally developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution on it. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
 
 The VS2019 build requires the x86 Microsoft Visual C++ Redistributable for Visual Studio 2019 to be installed to run.
 As of this writing, it can be downloaded here:
@@ -42,14 +44,17 @@ If that link does not work, this one might:
 	https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0
 Under the heading "Visual Studio 2015, 2017 and 2019", download the file from the link marked "x86: vc_redist.x86.exe".
 
+quig for Windows is currently only distributed as a 32-bit binary.
+quig has not been tested under a 64-bit environment!
+
 ===
 Installation on Windows:
 These instructions are specifically for Windows 10, although the process is similar on other versions.
 
 quig doesn't really need to be put anywhere special, although the .dll files must remain in the same folder as quig-for-windows.exe.
-Currently, the easiest way to set up quig is to associate .quig files with quig-for-windows.exe. 
-Right-click intro.quig, go to the 'Open with' menu, and select 'Choose another app'. Make sure the "Always use this app to open .quig files" box is checked. Then, go to More apps, and scroll all the way down to Look for another app on this PC. Navigate to where you downloaded quig, and select quig-for-windows.exe.
+The easiest way to run games currently is to either use run-quig.bat or run-quig.ps1 to select a game file to open, or drag and drop .quig files onto quig-for-windows.exe. 
 
+You can also associate .quig files with quig-for-windows.exe. Right-click intro.quig, go to the 'Open with' menu, and select 'Choose another app'. Make sure the "Always use this app to open .quig files" box is checked. Then, go to More apps, and scroll all the way down to Look for another app on this PC. Navigate to where you downloaded quig, and select quig-for-windows.exe.
 Future versions of quig will provide an installer that does this for you.
 
 ===
@@ -63,9 +68,10 @@ If your desktop environment supports it, you can associate .quig files with quig
 
 ===
 Usage:
-In the future, this will be nicer. At the moment, it's a bit rough.
 
-quig provides a simple GUI for running games under Linux-based systems. The bash script run-quig.sh will allow you to graphically select a quig game and configure any options. The Windows GUI is currently unfinished.
+quig on Windows provides a simple script that allows you to select a game to run by simply opening run-quig.bat. It does not currently allow you to configure any options. Opening the script will allow you to choose a .quig file to play.
+
+quig provides a slightly more advanced GUI for running games under Linux-based systems. The bash script run-quig.sh will allow you to graphically select a quig game and configure any options.
 When the game is exited, the GUI will reappear. Either select a game again or press cancel to exit.
 This interface has only been tested under Raspbian Linux so far, and requires YAD to be installed.
 On Raspbian, ($ is the prompt, don't type it!)
@@ -80,13 +86,11 @@ From the command line, games can be run as follows:
 where myname is the name of the game, and mygame.quig and mygame.png are together in the same folder.
 If mygame.quig has no errors and mygame.png can be loaded, the game will start.
 
-quig currently supports three graphics configurations:
+The following command line arguments are supported:
 	--soft: full software drawing. This is the slowest option, but will run acceptably on the majority of systems, including my Raspberry Pi 2. The window maxes out at 3x internal resolution when using this mode.
 	--hard: hardware window drawing. Use this option if your monitor doesn't run at 60hz and you want a larger screen size. As of this writing, this is the default option.
-	--hard-vsync: hardware window drawing, timed to vertical sync. Generally the best option. Take note that quig is designed to run at 60fps, so using this on a display that runs faster or slower will cause games to run at entirely the wrong speed.
-
-In addition, to run quig in fullscreen, use the --fullscreen option. This does not change the screen resolution, this merely stretches the window.
-As of this writing, fullscreen mode does not preserve aspect ratio -- most screens are 4:3 or 16:9, and quig runs at a 5:3 (15:9) resolution.
+	--hard-vsync: hardware window drawing, timed to vertical sync. Generally the best option. Take note that quig is designed to run at 60fps, so using this on a display that runs faster or slower will cause games to run at entirely the wrong speed (such as on a 144hz display, running games more than twice as fast as intended).
+	--fullscreen: runs the game in windowed fullscreen mode. As of this writing, fullscreen mode does not preserve aspect ratio -- most screens are 4:3 or 16:9, and quig runs at a 5:3 (15:9) resolution.
 	
 For example,
 	$ quig examples/astro-burst.quig --hard-vsync --fullscreen
@@ -97,7 +101,7 @@ When in windowed mode, quig will automatically resize the window to the largest 
 ===
 Controls:
 
-quig pretends that it's hooked up to a controller with the following layout:
+The quig environment expects a controller with the following layout:
 [D-pad  start  A B]
 
 On a keyboard, this maps to:
@@ -209,11 +213,10 @@ Command reference (it's quite short!):
 	quig may run somewhat fast on some systems -- it reports a speed of 61-62hz on my Pi 2, for example. Ideally, vsync should be enabled on systems that can support hardware drawing.
 	example: text(getfps(),0,0,1,0) --display the game's FPS at the top-left corner of the screen
 	
-provisional commands:
-If you use any of these in a quig game, then be warned: unlike the commands above, these can be changed or removed in later releases without warning.
-Each command is marked with how likely to change it is, along with how well-tested the command is.
+provisional/deprecated commands:
+None of these commands should currently be used. All of them are very likely to be changed at any point due to changing design. If these commands remain in newer versions of quig, they may have entirely different parameters!
 
-* playsong(id) [could possibly be changed, reasonably tested]
+* playsong(id) [very likely to be changed!, reasonably tested]
 	Play a song with the given id, from 0-30. The song will not loop.
 	If another song is playing, it will be replaced.
 	Songs must be in the same folder as the game and have .songN.mp3 as an extension, where N is the id of the song.
@@ -221,27 +224,46 @@ Each command is marked with how likely to change it is, along with how well-test
 	There is currently an inexplicable stutter when playing a song that has been stopped, whether by stopsong or by playing a different song, which may lead to a redesign of how sound works in quig, since it wraps SDL_Mixer somewhat thinly.
 	example: playsong(2) --play the song with id 2
 
-* loopsong(id) [could possibly be changed, reasonably tested]
+* loopsong(id) [very likely to be changed!, reasonably tested]
 	Nearly identical to playsong, but loops.
 	example: loopsong(0) --play the song with id 0, looping
 
-* stopsong() [could possibly be changed, well tested]
+* stopsong() [very likely to be changed!, well tested]
 	Stops any playing song.
 
-* readfile() [very likely to change, very little testing, be warned!]
+* readfile() [very likely to be changed!, very little testing, be warned!]
 	Load save data for the game into a table of strings. Each table entry is one line.
 	The save data is currently the full name of the game file with .quigsav at the end. For example, for a game named 'my-game.quig', the saved data will be in 'my-game.quig.quigsav'. This is very likely to change in later releases to 'my-game.quigsav'.
 	example: savedata=readfile() --read the game's save data into a table named savedata
 
-* writefile(data) [very likely to change, very little testing]
+* writefile(data) [very likely to be changed!, very little testing]
 	Write save data for the game. Pass a table of strings to it, and each string will be saved to its own line in the file.
 	Again, the save data is currently the full name of the game file with .quigsav at the end.
 	example: writefile(savedata) --write the table of strings named savedata into the game's save data.
 
-There are also some other commands that will be documented in a later revision of this manual:
+Other commands are:
 * playsound, loopsound, stopsound
-which deal in sound effects.
-Their APIs are currently very, very subject to change.
+which deal in sound effects, and are also subject to change.
+
+reserved commands/names:
+These commands don't exist yet, but may be used at some point, so make sure your own functions aren't named the same!
+
+* rectcol()
+	rectangle-rectangle collision
+* scrolltext()
+	scrolling text
+* audio()
+	generate audio with an internal synthesizer
+* keymulti()
+	get input from more than the first controller (up to 4)
+* half_width
+	just view_width/2
+* half_height
+	just view_height/2
+* getms()
+	get how long it took for the last frame to run, in milliseconds (under normal circumstances would report around 16.67)
+
+In addition, quig.* is entirely reserved (eg, quig.spr()).
 
 ===
 Constants reference:

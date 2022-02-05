@@ -68,7 +68,7 @@ speed_class=3; --1: easy, 2: basic, 3: normal, 4: turbo, 5: maniac
 
 --make a new table for holding speed class related stuff
 --TODO: this gets called other places, when they could and should just use the sc table, GO REPLACE ALL CALLS OF makeSpeedTable(), add them to sc[] instead
---didn't think things through at the time, paying for it now
+--didn't think things through at the time, paying for it now, it's a real mess
 function makeSpeedTable()
 	return {
 		{name="easy"},
@@ -532,7 +532,60 @@ levels.create[6]=function()
 	levels.finish()
 end
 
---TODO: at least 2 more levels (total 8)
+--TODO: this level needs work, is unfinished, and I might just redo it entirely
+levels.create[7]=function()
+	levels.start()
+	----[[
+	levels.add(4000,-1000,30,6)
+	levels.add(4000,0,15,6)
+	levels.add(1000,0,15,6)
+	levels.add(4000,0,15,6)
+	levels.add(1000,0,15,1)
+	levels.add(3000,1000,20)
+	levels.add(800,-2000,10)
+	levels.add(4000,0,10)
+	levels.add(1000,-1000,20,6)
+	levels.add(4000,2000,20,6)
+	levels.add(1000,-1000,20,6)
+	levels.add(800,500,10)
+	levels.add(1000,-3000,10,3)
+	levels.add(1000,-5000,10,3)
+	levels.add(1000,-7000,10,3)
+	levels.add(1000,0,25)
+	levels.add(1000,0,25,1)
+	levels.add(2000,0,25)
+	levels.add(1000,0,25,3)
+	levels.add(2000,7000,25)
+	levels.add(2000,15000,25)
+	levels.add(1500,20000,25)
+	levels.add(1500,20000,10)
+	levels.add(2000,18000,7)
+	levels.add(2000,16000,5)
+	levels.add(2000,2000,20)
+	levels.add(2000,0,10)
+	
+	levels.add(4000,0,25,1)
+	levels.add(4000,-10000,25)
+	levels.add(1000,-15000,25,4)
+	levels.add(2000,-10000,25,3)
+	--]]
+	levels.add(2000,0,20)
+	levels.add(2000,-7000,25)
+	levels.add(2000,-15000,25)
+	levels.add(2500,-20000,25)
+	levels.add(1500,-20000,30)
+	levels.add(1500,0,30)
+	levels.add(1500,0,5)
+	levels.add(1500,-20000,30)
+	levels.add(1500,-20000,5)
+	levels.add(1500,0,30)
+	levels.add(1600,1000,10)
+	levels.add(500,0,30)
+	levels.add(4500,3000,20)
+	levels.finish()
+end
+
+--TODO: at least 1 more level (total 8)
 
 --smoothly move to a point
 --I don't know the proper name for this, but it's dead useful
@@ -578,6 +631,8 @@ particles.draw=function()
 		squ(rx,ry,rs, particles[ii].r, particles[ii].g,particles[ii].b)
 	end
 end
+--update all of the particles
+--probably should only update the visible half of the particles each frame
 particles.update=function()
 	for ii=1,particles.max do
 		if particles[ii].active==1 then
@@ -588,7 +643,7 @@ particles.update=function()
 		end
 	end
 end
-
+--add a particle of a given color at a given point
 particles.addDirect=function(x,y,z,r,g,b)
 	for ii=1,particles.max do
 		if particles[ii].active==0 then
@@ -603,6 +658,7 @@ particles.addDirect=function(x,y,z,r,g,b)
 		end
 	end
 end
+--generate randomly colored particles in the distance, the color range is between lo and hi
 particles.add=function(x,y,lo,hi)
 	particles.addDirect(x+player.x,y,200, math.random(lo,hi),math.random(lo,hi),math.random(lo,hi))
 end
@@ -662,6 +718,7 @@ end
 --draw the side-barriers
 --this feels like it should be slow, but there really isn't ever that much on screen
 --still, it probably could be heavily, heavily optimized (in particular, we constantly re-divide for the scale, but I'm not touching that right now)
+--it's also a bit really messy
 objects.draw=function()
 	--table.sort(objects,objects.cmp)
 	for ii=1,objects.max do
@@ -754,7 +811,7 @@ objects.add=function(offset, width, flag)
 		end
 	end
 end
---used for z-sorting
+--sort two objects by z value
 objects.cmp=function(a,b)
 	if a.z > b.z then return true end
 	return false
@@ -843,14 +900,14 @@ player.update=function()
 	
 	--player speed control
 	--accelerate
-	--we accelerate at the very start of the stage so if you aren't holding the gas at the beginning, your time isn't immediately ruined
+	--we auto-accelerate at the very start of the stage so if you aren't holding the gas at the beginning, your time isn't immediately ruined
 	if key(key_a)>0 or player.runtime < 60 then 
 		player.speed=player.speed+player.speedaccel
 	else
 		player.speed=player.speed-player.speedfriction
 	end
 	--braking
-	--TODO: adjust based on speedclass -- lower classes don't need such strong brakes
+	--TODO: maybe adjust based on speedclass -- lower classes don't need such strong brakes
 	if key(key_b)>0 then
 		player.speed=player.speed-0.15
 	end
@@ -1026,115 +1083,230 @@ gmode.attract.go=function(c,g)
 end
 
 --attract sequence
---TODO: still not 100% certain on how it looks, but it's there
+--TODO: should I force a default background color for all scenes instead of accepting the one based on the last selected speed class?
+--this entire bit of code is hideous and supremely ad-hoc and you'll probably want a better structure if you decide to add an attract sequence to your own games
+--although, I do like how I separated it into sections and how nice and automatic it works, but it's still not anything resembling a robust animation system
+--this code only gets away with being like this because it's not actually interactive at all, because it's all very fragile
+--half tempted to design a second attract, but I should probably put a how-to-play screen there then
 gmode.attract.init=function()
-	local this=gmode.attract
+	local this=gmode.attract --I wrote this before I was better at lua, it really should be something like gmode.attract.init=function(this) or whatever and I'd call gmode.attract:init(), but whatever
+	--each of the individual parts, it's a table full of functions
 	this.section={}
+	--scrolling stars, "high speed space race" slides in
 	this.section[1]=function()
+		player.speed=-3
+		particles.addDirect(
+			math.random(-8000,8000),
+			math.random(-8000,8000),
+			20,
+			math.random(64,128),
+			math.random(64,128),
+			math.random(64,128)
+		)
+		particles.update()
+		particles.draw()
+		this.maxtime=90
 		local tpos={}
 		stars.offset_x=this.time/10
 		stars.offset_y=this.time/5
 		stars.draw()
-		tpos[1]=math.max(0,view_width-this.time*30)
-		tpos[2]=math.max(0,view_width+16-this.time*25)
-		tpos[3]=math.max(0,view_width+32-this.time*20)
-		tpos[4]=math.max(0,view_width+48-this.time*15)
+		tpos[1]=math.max(0,view_width-this.time*35)
+		tpos[2]=math.max(0,view_width+128-this.time*30)
+		tpos[3]=math.max(0,view_width+256-this.time*27)
+		tpos[4]=math.max(0,view_width+384-this.time*23)
 		text("high",tpos[1],0,4,0)
 		text("speed",tpos[2],8*4,4,0)
 		text("space",tpos[3],8*4*2,4,0)
 		text("race",tpos[4],8*4*3,4,0)
 	end
+	--expanding road, "beat the clock", reddening sky
 	this.section[2]=function()
+		this.maxtime=90
+		if this.time==0 then
+			particles.init()
+			player.init()
+		end
+		particles.addDirect(
+			math.random(-8000,8000),
+			math.random(-8000,8000),
+			200,
+			8,
+			16,
+			32
+		)
+		particles.addDirect(
+			math.random(-8000,8000),
+			math.random(-8000,8000),
+			200,
+			64,
+			32,
+			8
+		)
+		particles.update()
 		player.speed=9
 		if t%2==0 then
-			objects.add(0,600+this.time*20,0)
+			objects.add(0,600+this.time*40,0)
 		end
 		camera.x=math.random(-30,30)
-		--rect(0,0,view_width,view_height,0,0,this.time/2)
 		cls(this.time*0.8,4,12)
 		objects.update()
 		objects.draw()
-		--spr(view_width/2+math.random(-4,4),view_height/2+math.random(-4,4)-48,2.5+math.sin(this.time/10+0.2),2,0)
-		text("beat the clock! beat the clock! beat the clock! beat the clock!", -this.time*4,view_height/2-32,3,0)
+		particles.draw()
+		text(
+			"beat the clock! beat the clock! beat the clock! beat the clock!",
+			-this.time*4,
+			view_height/2-48,
+			3,
+			0
+		)
 		local bwflash=1
 		if this.time%40>=20 then bwflash=0 end
-		text("beat the clock! beat the clock! beat the clock! beat the clock!",this.time*2-228,view_height/2-32-8,1,bwflash)
+		text(
+			"beat the clock! beat the clock! beat the clock! beat the clock!",
+			this.time*2-228,
+			view_height/2-48-8,
+			1,
+			bwflash
+		)
 	end
+	--more scrolling stars, "fastest in the galaxy" text slides into view
 	this.section[3]=function()
+		this.maxtime=80
 		if this.time==0 then
 			stars.init()
+			this.shake=0 --lua lets me get away with this kind of thing for some reason
 		end
+		local shakeval = this.shake
+		if this.time%2==0 then shakeval=-shakeval end
+		stars.offset_x=stars.offset_x+shakeval
 		stars.draw()
-		if this.time>5 then
-			text("fastest",0,0+8,4,1)
+		stars.offset_x=stars.offset_x-shakeval
+		if this.time>=5 then
+			if this.time==5 then this.shake=5 end
+			text("fastest",shakeval,0+8,4,1)
 		end
-		if this.time>20 then
-			text("in",0,8*4+8,4,0)
+		if this.time>=20 then
+			if this.time==20 then this.shake=7 end
+			text("in",shakeval,8*4+8,4,0)
 		end
-		if this.time>35 then
-			text("the",0,8*4*2+8,4,0)
+		if this.time>=35 then
+			if this.time==35 then this.shake=10 end
+			text("the",shakeval,8*4*2+8,4,0)
 		end
-		if this.time>50 then
-			text("galaxy",0,8*4*3+8,4,0)
+		if this.time>=50 then
+			if this.time==50 then this.shake=15 end
+			text("galaxy",shakeval,8*4*3+8,4,0)
 		end
-		if this.time>80 then
-			this.time=99
-		end
-		stars.offset_x=stars.offset_x-0.5
-		stars.offset_y=stars.offset_y+1
-		
+		--added offset_x/y just so I could do this
+		--might set the stars to wrap, so they can be infinitely scrolled
+		stars.offset_x=stars.offset_x-0.0625
+		stars.offset_y=stars.offset_y-0.25
+		if this.shake>0 then this.shake=this.shake-1 end
 	end
+	--big shaking text, "get ready for"
+	--very dramatic screen flash to white too that I hope isn't too intense
 	this.section[4]=function()
+		this.maxtime=220
+		if this.time==0 then
+			stars.init()
+			this.shake=0 --lua lets me get away with this kind of thing for some reason
+		end
 		local cur_str=""
 		local cur_mode=0
 		local rng_pow=1
-		--local bg_lvl=math.max(0,255-this.time*2)
-		--cls(bg_lvl,bg_lvl,bg_lvl)
+		local shakeval = this.shake
+		if this.time%2==0 then shakeval=-shakeval end
 		cls(255,255,255)
-		if this.time>5 and this.time<20 then
+		if this.time==0 then
+			particles.init()
+			player.init()
+			player.speed=1
+		end
+		--get
+		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+		particles.update()
+		if this.time>=5 and this.time<20 then
+			particles.draw()
+			if this.time==5 then
+				this.shake=5
+			end
 			cur_str="get"
 			cur_mode=1
-			rng_pow=2
-			--text("get", view_width/2-(8*3*5)/2,view_height/2-(8*5)/2, 5,1)
+			rng_pow=0
+			player.speed=1
 		end
+		--ready
 		if this.time>=20 and this.time < 35 then
+			particles.draw()
+			if this.time==20 then
+				this.shake=10
+			end
 			cur_str="ready"
 			cur_mode=0
-			rng_pow=2
-			--text("ready",view_width/2-(8*5*5)/2,view_height/2-(8*5)/2,5,0)
+			rng_pow=1
+			player.speed=3
 		end
-		if this.time>=35 then
+		--for
+		if this.time>=35 and this.time < 50 then
+			if this.time==35 then
+				this.shake=15
+			end
+			particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
 			cls(0,0,0)
+			particles.draw()
 			cur_str="for"
 			cur_mode=1
 			rng_pow=3
-			--text("for",view_width/2-(8*3*5)/2,view_height/2-(8*5)/2,5,0)
+			player.speed=5
 		end
+		--[astro-burst]
+		if this.time>=50 then
+			if this.time==50 then
+				this.shake=20
+			end
+			player.speed=9
+			particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+			particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
+			rng_pow=1
+			cls(0,12,24)
+			particles.draw()
+			cur_str=""
+			cur_mode=2
+			text(
+				"[astro-burst]",
+				shakeval+view_width/2-16*13/2+math.random(-rng_pow,rng_pow), math.random(-rng_pow,rng_pow)+view_height/2-8,
+				2,
+				3
+			)
+		end
+		--draw the current part's message
+		--doesn't draw the [astro-burst] text, since it's a different size and behaves differently
 		text(
 			cur_str,
 			view_width/2-(8*string.len(cur_str)*5)/2+math.random(-rng_pow,rng_pow),
-			view_height/2-(8*5)/2+math.random(-4,4),
+			view_height/2-(8*5)/2+shakeval,
 			5,
 			cur_mode
 		)
-		if this.time>50 then
-			this.time=99
-		end
+		--shake countdown
+		if this.shake>0 then this.shake=this.shake-1 end
 	end
+	--go to the title now that all is done
 	this.section[5]=function()
 		gmode.set(gmode.title)
 		return
 	end
-	
+	--reset everything
 	player.init()
 	camera.init()
 	objects.init()
 	particles.init()
 	stars.init()
-	
+	--timing and indexing, then kick it all off
 	this.current=1
 	this.gap=0
 	this.time=0
+	this.maxtime=90 --don't assume this was set, but 90f is reasonable
 	this.go(1)
 end
 --run each attract screen segment
@@ -1150,7 +1322,7 @@ gmode.attract.step=function()
 		gmode.set(gmode.title)
 		return
 	end
-	if this.time>90 then
+	if this.time>this.maxtime then
 		this.current=this.current+1
 		this.go(this.current)
 	end
@@ -1166,12 +1338,14 @@ gmode.title.init=function()
 	t=0
 end
 gmode.title.step=function()
-	--start game
-	--TODO: this should have three options, start, settings, and how to play
+	--kick back to the attract screen if we just leave it here
 	if t>60*15 then
 		gmode.set(gmode.attract)
 		return
 	end
+	--start game
+	--TODO: this should have three options, start, settings, and how to play
+	--might stick that in a separate screen though
 	if key(key_start)==1 then
 		gmode.set(gmode.stage_select)
 		return
@@ -1181,7 +1355,6 @@ gmode.title.step=function()
 		particles.add(math.random(-8000,8000), math.random(-8000,8000), 32,96)
 	end
 	--constantly add road
-	--TODO: should we leave this straight?
 	if t%10==0 then
 		objects.add(0,3000,0)
 	end
@@ -1217,9 +1390,15 @@ function draw_clock(flash)
 	if clock_big > 0 then clock_big=clock_big-1 end
 	--draw the clock and underlying text
 	text(string.format("%02d", player.time//60),view_width/2-8*clock_scale,0,clock_scale,1-low_time)
-	--the underlying text additionally warns you when time is VERY low
+	--the underlying text additionally warns you when time is VERY low/empty
 	local timestr="time"
-	if player.time<60*5 and player.time>0 and t%40>=20 then timestr="low!" end
+	if player.time>0 then
+		if t%40>=20 and player.time<60*5 then
+			timestr="low!"
+		end
+	elseif t%200>=100 then
+		timestr="over"
+	end
 	text(timestr,view_width/2-8*clock_scale,8*clock_scale,clock_scale/2,3)
 end
 
@@ -1271,7 +1450,7 @@ gmode.ingame.step=function()
 	text(pspeed,view_width-6*8,view_height-16,2,2+flip)
 	
 	--draw out-of bounds text
-	if not oobt then oobt=0 end--dirty hack
+	if not oobt then oobt=0 end --dirty hack
 	--we show the oob stuff for a few frames after returning to the track
 	if player.oob then
 		player.oobtimer=20
@@ -1346,6 +1525,7 @@ gmode.pause.step=function()
 	text(conftxt, view_width-8*#conftxt+1,88-txtoffset-1,1,2)
 	text(conftxt, view_width-8*#conftxt,88-txtoffset,1,3)
 	--if gmode.pause.quit then quit_txt="(Y)n " end
+	--draw the quit message alongside the player's choice
 	local sctxt2="quit?   "
 	if this.confirm then
 		sctxt2="sure?   "
@@ -1359,6 +1539,7 @@ gmode.pause.step=function()
 	if t%30 == 10 then gmode.pause.arrowx=-10 end
 	gmode.pause.arrowx=target(0,gmode.pause.arrowx,7)
 	text(">",view_width-4*8+gmode.pause.arrowx,72-txtoffset+sel_offset,1,1)
+	--select up/down
 	if key(key_down)==1 then
 		gmode.pause.quit=true
 	end

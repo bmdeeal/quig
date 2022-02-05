@@ -4,10 +4,10 @@ by B.M.Deeal
 ---
 
 -about-
-This tutorial is meant to cover the very basics of making a game with quig. This tutorial is set up for you, the reader, to get going with quig very quickly, showing you how to make a game. It isn't an example of best practices, but some effort is made to keep things organized.
+This tutorial is meant to cover the very basics of making a game with quig. This tutorial is set up for you to get going with quig relatively quickly. It isn't an example of best practices (especially regarding how I use Lua), but some effort is made to keep things organized.
 
 To keep things simple, this tutorial uses only colored squares, not needing you to provide sprites.
-This tutorial assumes a basic understanding of programming, and ideally a basic understanding of Lua. If you are entirely unfamiliar with Lua, you might want to go look up a tutorial on using it. It isn't difficult, but it is somewhat different from other common programming languages.
+This tutorial assumes a basic understanding of programming, and ideally a basic understanding of Lua. If you are entirely unfamiliar with Lua, you might want to go look up a tutorial on using it. It isn't difficult, but it is a little different from other common programming languages.
 
 The game we will be making is pretty simple:
 The player is tasked with picking up a randomly positioned dot on the screen. Every time the player picks up the dot, it teleports somewhere else, giving the player some points in the process. The amount of points the player will get from picking it up is based on the amount of time remaining. If the time reaches zero, the game restarts.
@@ -15,17 +15,17 @@ The player is tasked with picking up a randomly positioned dot on the screen. Ev
 The D-pad moves the player. The A and B buttons allow the player to move faster, as long as they have any boost available.
 Pressing Start will pause and unpause the game.
 
-Very simple, right? Let's go.
+With a plan in place, let's get started.
 
 ---
 
 -getting started-
 
-Anything between [code start] and [code end] is game code, rather than descriptive text. Remember: don't include [code start] or [code end] in your quig file!
+Anything between [code start] and [code end] is game code, rather than descriptive text. Remember, don't include [code start] or [code end] in your quig file!
 
-The easiest way to get started is to copy blank.quig and blank.png from the examples folder and rename them to gtd.quig and gtd.png respectively.
+Copy blank.quig and blank.png from the examples/utils+etc/ folder and rename the copies to gtd.quig and gtd.png respectively.
 
-After doing this, gtd.quig should have two functions in them already, like as follows:
+After doing this, gtd.quig should have two functions in it:
 [code start]
 function init()
 end
@@ -33,7 +33,9 @@ function step()
 end
 [code end]
 
-With that code in place, let's handle the player. We'll use a Lua table to store information about the player, along with a few functions about it.
+These are the two functions that every quig program needs. init() runs when the game first starts up, and step() runs every frame.
+
+We'll use a Lua table to store information about the player, along with a few functions to handle it.
 
 [code start]
 --player control
@@ -54,11 +56,11 @@ player.init=function()
 end
 [code end]
 
-We've initialized some variables outside of the player.init() function because they don't reset when the whole game does.
+We've initialized some variables outside of the player.init() function because they shouldn't reset when the whole game does.
 
 We set up some variables controlling how the player moves, too. The player moves one pixel per frame in each direction normally, and moves two pixels a frame when boosting.
 
-The player can boost for 2.5 seconds. quig runs at a fixed 60hz rate, so we multiply the time in seconds by 60.
+The player can boost for 2.5 seconds. Since quig runs at a fixed 60hz rate, we multiply the time in seconds by 60.
 
 If we run the code now, not only does nothing really happen, but the player object isn't initialized fully. We never ran the player.init() function. Let's add that to init() now, as follows:
 
@@ -314,7 +316,7 @@ end
 
 With this, the game should be done, right? The player exists, the dot exists, and you can run around, collecting dots. That's it, yeah?
 
-We're almsot done, but there's still more needed. For starters, there isn't much of a game. The score isn't shown. The score bonus doesn't tick down. There's a little bit of polish that's missing too. Apart from the major issues, the game is also missing a stuff like a title screen and pausing.
+We're almost done, but there's still more needed. For starters, there isn't much of a game. The score isn't shown. The score bonus doesn't tick down. There's a little bit of polish that's missing too. Apart from the major issues, the game is also missing stuff like a title screen and pausing.
 
 Let's draw the player information. Score, time, boost.
 
@@ -439,7 +441,7 @@ For that, we need to know if a: the game is in a "paused" state, and if a game i
 
 Edit init() to look as follows:
 [code start]
--re-initialize everything
+--re-initialize everything
 --this function is REQUIRED by quig and runs when the game first starts up
 --we also call it ourselves when the player loses
 function init()
@@ -459,7 +461,7 @@ Now, we need a function that handles what goes on when the game is paused:
 function pauseupdate()
 	--informative messages
 	text("press start to continue!",0,view_height-8,1,0)
-	--if there isnt' a game running, show the title screen
+	--if there isn't a game running, show the title screen
 	if game_over then
 		text("get-the-dot!", view_width/2-12*16/2, view_height/2-8,2,1)
 		text("game over!", 0,24,1,3)
@@ -481,10 +483,12 @@ This function is pretty simple. It always shows the "press start" message, so th
 After that, it shows different messages based on whether there is a game running or not, showing either the game controls and the name of the game, or displaying a paused message on top of the player and the dot.
 
 The "dirty hack" where it just calls math.random() on its own basically changes the RNG based on how long the game is paused/on the title. quig will have a proper way to initialize the RNG at some point, but it doesn't right now.
-We can't just do the usual way of initializing the RNG in Lua using math.randomseed(os.time()), because quig doesn't support the os.* functions. As of this writing, they're accessible, but future versions of quig WILL remove them.
+We can't just do the usual way of initializing the RNG in Lua using math.randomseed(os.time()), because quig officially doesn't support the os.* functions. As of this writing, they're still accessible, but future versions of quig will almost certainly remove them.
 
-It's a bit annoying that Lua throws reading the system clock together with running arbitrary commands (which can lead to destructive results, whether on accident or on purpose).
+It's a bit annoying that Lua throws in perfectly safe things like reading the system clock together alongside things that require quite a bit more trust, such as deleting files or running arbitrary commands (which can lead to destructive results, whether on accident or on purpose).
 This workaround has one issue -- the very first dot position is constant on game startup, since init() calls dot.teleport(). Fixing this is left as an exercise for the reader.
+
+Admittedly, nothing is stopping you from just putting math.randomseed(os.time()) at the top of the program and calling it a day, other than the fact that it might stop working in a later quig release.
 
 Now, a few modifications to step() need to be made to actually get this to work, and the game is complete. Or at least, completely playable.
 
@@ -523,12 +527,12 @@ After that, the other big addition is that we reset game_over if the game isn't 
 With that, the game is fully playable.
 
 There are still several issues with it. The biggest issue is that the player can (and will) get unlucky, having to run the full width of the screen back and forth, making the player use up all of their boost. 
-Try your hand at fixing this while still keeping things challenging. 
+Try your hand at fixing this while still keeping things challenging. Maybe add dangerous objects that remove time, make it so the dot never goes too far away, or automatically alter how much time the player gets based on how far they are.
 
 In addition, the graphics are a little drab. Try drawing some sprites, and using the spr() function! Maybe add some detail to the background, mess with the colors, go wild!
 Make the game your own. The source of get-the-dot! is licensed under CC0, which means you can do anything you want with it. Change some stuff, slap your name on it, show your friends!
 
-Hopefully, you're more comfortable with using quig and are ready to start working on your own games.
+Hopefully, you're more comfortable with using quig after following this tutorial and are ready to start working on your own games.
 
 Have fun making games with quig!
 --B.M.Deeal

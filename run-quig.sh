@@ -15,7 +15,7 @@
 
 #notes: this is hilariously fragile and breaks severely if anything changes place, but it will do for now (and maybe even later if nothing changes place)
 #TODO: check for quig in $PATH before trying ./quig
-
+#TODO: make simple version that works with Zenity, which is more likely to be installed on more machines
 
 #run in a loop, eg, if the user wants to play another game
 #TODO: the previous settings should remain selected, rather than resetting!
@@ -32,7 +32,7 @@ do
 		--field="<b>Welcome to quig!\nSelect options below.</b>":LBL "" \
 		--field="":LBL "" \
 		--field="Game to run:":FL "" \
-		--field="Display mode:":CB "^Software"!"Hardware"!"Hardware (vsync)" \
+		--field="Display mode:":CB "Software"!"^Hardware"!"Hardware (vsync)" \
 		--field="Run in fullscreen?":CHK "false"
 	)
 	
@@ -77,10 +77,30 @@ do
 		fullscreen="--fullscreen"
 	fi
 	
-	#run quig
-	echo "Running command: ./quig '$game $videomode $fullscreen'..."
+	#run quig, preferring a binary in the current folder if available
+	quigloc="quig"
+	if [ -f "./quig" ]
+	then
+		quigloc="./quig"
+	elif hash "quig" &> /dev/null
+	then
+		quigloc="quig"
+	else
+		yad --form \
+		--title="fatal error!" \
+		--text-align="left" \
+		--image="dialog-warning" \
+		--text="<b>Fatal error:</b>\nCannot find quig!" \
+		--button="gtk-ok"
+		exit 1
+	fi
+	echo "Running command: '$quigloc $game $videomode $fullscreen'..."
 	echo ""
-	./quig "$game" "$videomode" "$fullscreen"
+	"$quigloc" "$game" "$videomode" "$fullscreen"
+	
+	
+	
+		
 	echo ""
 	echo "Exited quig..."
 done

@@ -2,6 +2,7 @@
 --intro.quig - a simple demo game for a user to make sure if quig is working
 --a little over-complicated for an introductory demo, but at the same time, this is likely to be the first thing a quig user sees.
 --this wasn't going to be a game at all, but I couldn't resist
+--I might end up separating the game from the intro text at some point, but I dunno.
 
 --[[
 how to play:
