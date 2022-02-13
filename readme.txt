@@ -214,7 +214,7 @@ Command reference (it's quite short!):
 	example: text(getfps(),0,0,1,0) --display the game's FPS at the top-left corner of the screen
 	
 provisional/deprecated commands:
-None of these commands should currently be used. All of them are very likely to be changed at any point due to changing design. If these commands remain in newer versions of quig, they may have entirely different parameters!
+None of these commands should currently be used at all! All of them are very likely to be changed at any point due to changing design. If these commands remain in newer versions of quig, they may have entirely different parameters!
 
 * playsong(id) [very likely to be changed!, reasonably tested]
 	Play a song with the given id, from 0-30. The song will not loop.
@@ -263,7 +263,8 @@ These commands don't exist yet, but may be used at some point, so make sure your
 * getms()
 	get how long it took for the last frame to run, in milliseconds (under normal circumstances would report around 16.67)
 
-In addition, quig.* is entirely reserved (eg, quig.spr()).
+In addition, qu_* and quig.* are entirely reserved (eg, quig.spr() or qu_spr()).
+A future release of quig may prefix all of the commands so that there is no chance of existing games colliding.
 
 ===
 Constants reference:

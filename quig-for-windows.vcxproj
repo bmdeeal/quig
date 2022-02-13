@@ -81,6 +81,7 @@
     <IncludePath>$(SolutionDir)libraries-w32\binaries\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)libraries-w32\binaries\lib;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)</OutDir>
+    <TargetName>quig</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
