@@ -1,0 +1,300 @@
+--name of game: platform game example
+--game author: B.M.Deeal <brenden.deeal@gmail.com>
+--this file licensed under CC0; NO WARRANTY
+--see <https://creativecommons.org/publicdomain/zero/1.0/> for details
+
+--[[
+	This example is a quick and dirty starting place to make your own platform game with.
+	You might end up replacing some/all of it, but it's intended as a starting point, rather than a finished game.
+	
+	A lot of this is based on code I wrote nearly a decade ago (in particular, the way colliding with walls is handled).
+	It works reasonably well, but has an actual, literal corner case that is handled in a very ugly and somewhat awkward way.
+	Fixing this is currently left as an exercise to the reader. :P
+	
+	This game also massively calls into question the decision in quig to make the standard sprite drawing offset the center, since it needs to be accounted for, but any choice of a default offset would cause issues with different types of games.
+	
+	TODO LIST (for me, although you'll want to fix them if you're using this example):
+	* handle object types properly (we could generate a table in the collision check, and you can just check if the object type number is true)
+	* deal with the corner case properly/re-implement collision resolution for walls
+	
+	IDEAS TO TRY (for the reader possibly, unless I decide to throw these in):
+	* animation -- just change the player sprite every few frames
+	* jump forgiveness -- if you're not on a platform, add a few frames where you can jump in mid air, like a cartoon character that hasn't realized that it's falling
+	* semi-solid platforms -- if you're moving downwards from above, they're solid, but otherwise, the player can ignore them
+	* moving platforms -- update the player's position as they move
+	* zooming camera -- zoom the camera in/out dynamically? this one may have issues with tile positioning gaps, but it's worth a try, and you could draw tiles slightly larger than normal to counteract that
+--]]
+
+--is the game paused?
+paused=false
+
+--get whether a number is negative (returns -1), positive (returns 1), or zero (returns 0)
+function sign(n)
+	if n>0 then return 1 end
+	if n<0 then return -1 end
+	return 0
+end
+
+--tiles to draw on screen
+--this isn't really a tilemap, rather, it's a bunch of sprites
+tiles={}
+--setup the tile list, this should get called at the start of each stage
+tiles.init=function(self)
+	--how many tiles are in the stage
+	self.count=0
+	--actual list of tiles
+	self.map={}
+	--how to scroll everything
+	--anything that needs to scroll alongside the level should be affected by tiles.x/tiles.y
+	self.x=0
+	self.y=0
+	self.x_offset=0
+end
+
+--add a tile
+--offset is how far from the next tile (0 is reasonable, negative numbers aren't) that this one should be placed (in tile widths, scaled)
+--offset should probably be 1 usually
+--this ensures that adding stuff to a level shifts it around, and also ensures that once we find a tile that's off-screen, we can just stop
+--ypos is just the y position
+--kind is what object number to add
+tiles.add=function(self, offset, y, scale, kind)
+	if kind==nil then kind=0 end
+	if scale==nil then scale=1 end
+	self.count=self.count+1
+	self:addOffset(offset*(16*scale)) --quig sprites are 16x16 at 1x scale
+	self.map[self.count]={
+		--undo the center offset -- quig sprites are drawn centered, this shifts back to the top-left corner
+		x=self.x_offset-8*scale,
+		y=y-8*scale,
+		--set the kind, but we set the texture offset elsewhere
+		kind=kind,
+		tx=1,
+		ty=0,
+		--you probably shouldn't use non-integer scales for tiles (it looks ugly and will have positioning issues), but it's not enforced
+		scale=scale
+	}
+end
+
+--adjust the offset for the next tile
+tiles.addOffset=function(self, offset)
+	self.x_offset=self.x_offset+offset
+end
+
+--draw all the tiles
+--TODO: stop drawing tiles that are off screen
+tiles.draw=function(self)
+	for ii=1,self.count do
+		spr(
+			self.map[ii].x+self.x,
+			self.map[ii].y+self.y,
+			self.map[ii].scale,
+			self.map[ii].tx,
+			self.map[ii].ty
+		)
+	end
+end
+
+--setup levels
+--there is really only one level, but it's setup as if there were more
+levels={}
+levels[1]=function()
+	tiles:init()
+	tiles:add(1,128,2)
+	tiles:add(1,128,2)
+	tiles:add(0,96,1)
+	tiles:add(1,128,2)
+	tiles:add(1,80)
+	tiles:add(1,72)
+	tiles:add(3,72)
+	tiles:add(2,96,2)
+	tiles:add(2,80,2)
+	tiles:add(2.5,80,2)
+	tiles:add(1,80,2)
+	tiles:add(2,96,2)
+	tiles:add(3,88,1)
+	tiles:add(2,96,2)
+	tiles:add(3,72,1)
+	tiles:add(2,96,2)
+	tiles:add(3,88,1)
+end
+
+--player character
+player={}
+--initialize the player object
+player.init=function(self)
+	--current position
+	self.x=16
+	self.y=0
+	--player state
+	self.ground=0
+	self.jump=0
+	--previous position without a collision
+	self.xprev=0
+	self.yprev=0
+	--how much to move this frame
+	self.xd=0
+	self.yd=0
+	--physics
+	self.gravity=0.35 --fall speed
+	self.friction=0.125 --only affects horizontal speed
+	self.max_speed_x=1.5
+	self.max_speed_y=4
+	self.accel=0.25 --how fast to accelerate horizontally, must overcome friction
+	self.jump_strength=3 --how much to move by each frame during a jump
+	self.jump_time=0 --how long you've held a jump
+	self.jump_max=9 --how long in frames you can hold a jump
+end
+
+--handle player movement, collision, and physics
+player.update=function(self)
+	--handle physics
+	if self:checkCollide(0,1) >=0 then
+		self.ground=true
+	else
+		self.ground=false
+	end
+	--move left/right
+	if key(key_left)>0 then
+		self.xd=self.xd-self.accel
+	end
+	if key(key_right)>0 then
+		self.xd=self.xd+self.accel
+	end
+	--jump
+	--begin a jump when you press the A-button on the ground
+	if key(key_a)==1 and self.ground and not jump then
+		self.jump=true
+	end
+	--continue rising until you let go/run out of jump time
+	if key(key_a)>0 and self.jump and self.jump_time>0 then
+		self.yd=-self.jump_strength
+		self.jump_time=self.jump_time-1
+	else
+		self.jump=false
+	end
+	--slow the player down horizontally
+	if math.abs(player.xd)>=player.friction then
+		player.xd=player.xd-sign(player.xd)*player.friction
+	else
+		player.xd=0
+	end
+	--fall down
+	if not self.ground then
+		self.yd=self.yd+self.gravity
+	end
+	--clamp speed
+	if self.xd > self.max_speed_x then
+		self.xd=self.max_speed_x
+	end
+	if self.xd < -self.max_speed_x then
+		self.xd=-self.max_speed_x
+	end
+	if self.yd > self.max_speed_y then
+		self.yd=self.max_speed_y
+	end
+	if self.yd < -self.max_speed_y then
+		self.yd=-self.max_speed_y
+	end
+	--resolve collision with walls -- we just check if the space we're about to enter is a wall, and if so, we inch towards, pixel-by-pixel
+	--horizontally
+	if self:checkCollide(self.xd, 0) >= 0 and sign(self.xd) ~=0  then
+		while (self:checkCollide(sign(self.xd),0) < 0 ) do
+			self.x=self.x+sign(self.xd)
+		end
+		self.xd=0
+	end
+	--vertically
+	if self:checkCollide(0, self.yd) >= 0 and sign(self.yd) ~=0  then
+		self.y=math.floor(self.y) --if you don't do this, there's sometimes a gap between the player and the floor; there is almost certainly a similar glitch with horizontal movement that is less noticeable
+		while (self:checkCollide(0,sign(self.yd)) < 0 ) do
+			self.y=self.y+sign(self.yd)
+		end
+		self.yd=0
+	end
+	--solve the literal corner case (eg, when you hit the corner of a block)
+	--just jump back to the last safe location if we're still colliding with an object
+	--jarring, but prevents the player from sticking on corners
+	if self:checkCollide(0,0) < 0 then
+		self.xprev=self.x
+		self.yprev=self.y
+	else
+		self.x=self.xprev
+		self.y=self.yprev
+	end
+	--update player position after all is done
+	self.x=self.x+self.xd
+	self.y=self.y+self.yd
+	--restore jumping on the ground
+	if (self.ground) then
+		self.jump_time=self.jump_max
+	end
+	--clamp position horizontally
+	if self.x<8 or self.x-self.xd<8 then --the magic number 8 here is is half the width of a quig sprite, which is 16x16, and sprites are positioned by their center
+		self.x=8
+		self.xd=0
+	end
+	--restart game when 
+	if self.y>view_height+8 then
+		init()
+	end
+	--scroll the tiles to match the player's position, but don't scroll behind the left edge of the screen
+	tiles.x=math.min(0,view_width/2-player.x)
+end
+
+--check the list of tiles for a collision
+--offset_x/y are how far to shift from the player's position, in pixels
+--returns -1 on failure, or the type of tile on success
+--TODO: this checks every single tile and we really don't need to
+player.checkCollide=function(self,offset_x,offset_y)
+	if offset_x==nil then offset_x=0 end
+	if offset_y==nil then offset_y=0 end
+	--cycle through all tiles, if we get a hit, say what we hit
+	--note: this also means that if you're hitting multiple types of thing, this won't tell you (TODO: actually, this should probably be modified to only check one type of thing!)
+	--we could have a bitmask with what types of objects we're colliding, or store 
+	for ii=1,tiles.count do
+		if squcol(self.x+offset_x,self.y+offset_y,1,tiles.map[ii].x,tiles.map[ii].y,tiles.map[ii].scale) then
+			return tiles.map[ii].kind
+		end
+	end
+	return -1
+end
+
+--draw the player object
+player.draw=function(self)
+	spr(self.x+tiles.x,self.y+tiles.y,1,0,0)
+end
+
+--reset the game (also gets automatically called at the start of the game
+function init()
+	player:init()
+	levels[1]()
+end
+
+--main game loop, gets called every frame
+function step()
+	--clear the screen, (red, green, blue)
+	cls(0,4,12)
+	--draw text (string, x-position, y-position, scale, drawing mode [0 is white on black, 1 is black on white, 2 is white on transparent, and 3 is black on transparent])
+	text("quig platform game example", 0,0, 1, 3)
+	--update the game only if we're not paused
+	if not paused then
+		player:update()
+	end
+	--draw everything
+	tiles:draw()
+	player:draw()
+	--draw the paused text in the bottom right corner if we are paused, putting it on top of everything else
+	if paused then
+		local pausetxt="[paused]"
+		local pausescale=2
+		--the magic number 8 here is because the quig font is an 8x8 font
+		text(
+			pausetxt,
+			view_width-string.len(pausetxt)*8*pausescale,
+			view_height-8*pausescale,pausescale, 
+			0
+		)
+	end
+	--toggle between pausing or not
+	if key(key_start)==1 then paused = not paused end
+end

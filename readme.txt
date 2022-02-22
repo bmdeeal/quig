@@ -1,5 +1,6 @@
-quig - quick lua game system
+quig - quick Lua-based game system
 (C) 2020-2022 B.M.Deeal <brenden.deeal@gmail.com>
+<https://github.com/bmdeeal/quig>
 
 ===
 Legal:
@@ -16,7 +17,7 @@ About:
 
 quig is a simple program designed to let you quickly and easily make small games with Lua. The various limitations found in quig are largely designed to keep the process simple and easy -- low resolution to reduce the focus on graphics, few buttons to encourage pick-up-and-play titles, and a small command set that contains the essentials of what is needed to make a game.
 
-A simple tutorial showing how to get started and create a simple game is provided. See get-the-dot.txt for details.
+A simple tutorial showing the process of creating a simple game from start to finish is provided. See get-the-dot.txt for details.
 
 At the moment, quig isn't really a fantasy console or anything (like TIC-80 or PICO-8), all editing is done with separate text editors and graphics editors.
 In addition, it's maybe a bit too simple, and the lack of integrated editors (in particular, for graphics) really does make it less than obvious to get started with vs other Lua-based game making systems, but it's still not too hard. Draw some graphics, write some code, play. 
@@ -25,16 +26,16 @@ Games are drawn to a true-color 240x144 canvas that gets scaled up. Sprites are 
 quig updates at a fixed 60hz. However, in software mode or without vsync enabled, quig has been observed to update as quickly as 62hz on some systems.
 
 Games for quig are comprised of two files, a graphics file (just a plain 128x128 PNG image containing 16x16 tiles) and a Lua source file.
-For example, my-game.quig would contain the Lua source and my-game.png would contain the graphics.
+For example, my-game.quig would contain the Lua source and my-game.png would contain the graphics. Both files are required.
 
 ===
 System requirements:
 
-quig has been tested under Raspbian Linux and Windows 10 (via MSYS2 and a VS2019 build).
+quig has been tested under Raspberry Pi OS 10 and Windows 10 (via MSYS2 and a VS2019 build).
 quig requires SDL2, SDL_image, SDL_mixer, and Lua 5.3 to be installed on Linux; the Windows build provides its own copies of them.
 On Windows systems, the scripts run-quig.bat and run-quig.ps1 are provided to make it easier to run games with quig. These scripts require PowerShell to be installed to work.
 On Linux systems, the script run-quig.sh is similar, if more featureful. It requires Bash and YAD to be installed.
-quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), with minor frame drops in the example game astro-burst.
+quig will run on a wide range of hardware -- quig has even been run on a Raspberry Pi Zero (running at 1x resolution), although many games will not run at full speed on such low-powered hardware.
 quig was originally developed on a Raspberry Pi 2, and runs acceptably in software mode at 3x resolution on it. quig runs very well on a Raspberry Pi 4, supporting hardware mode and vsync there.
 
 The VS2019 build requires the x86 Microsoft Visual C++ Redistributable for Visual Studio 2019 to be installed to run.
@@ -44,18 +45,21 @@ If that link does not work, this one might:
 	https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0
 Under the heading "Visual Studio 2015, 2017 and 2019", download the file from the link marked "x86: vc_redist.x86.exe".
 
+In addition, the main interface, quig-ui, requires .NET Core 3.1 or another compatible version of .NET to be installed. If it is not installed, you will be prompted to download it.
+If that does not work, you can download it from here, under '.NET Desktop Runtime':
+	https://dotnet.microsoft.com/en-us/download/dotnet/3.1
+
 quig for Windows is currently only distributed as a 32-bit binary.
-quig has not been tested under a 64-bit environment!
+Currently, quig has not been compiled under a 64-bit environment.
 
 ===
 Installation on Windows:
 These instructions are specifically for Windows 10, although the process is similar on other versions.
 
-quig doesn't really need to be put anywhere special, although the .dll files must remain in the same folder as quig-for-windows.exe.
-The easiest way to run games currently is to either use run-quig.bat or run-quig.ps1 to select a game file to open, or drag and drop .quig files onto quig-for-windows.exe. 
+quig doesn't need any particularly special installation.
+Simply run quig-ui.exe. After that, go to Configure editor settings to change your preferred graphics and code editor, as well as configure quig-ui to be the default editor for .quig games.
 
-You can also associate .quig files with quig-for-windows.exe. Right-click intro.quig, go to the 'Open with' menu, and select 'Choose another app'. Make sure the "Always use this app to open .quig files" box is checked. Then, go to More apps, and scroll all the way down to Look for another app on this PC. Navigate to where you downloaded quig, and select quig-for-windows.exe.
-Future versions of quig will provide an installer that does this for you.
+quig.exe is the main game engine, and is a command-line based program. Double-clicking on it will simply bring up a message that there isn't a game to load. Dragging a .quig file onto it will run it, although you cannot configure any other options.
 
 ===
 Installation on Linux:
@@ -66,22 +70,26 @@ Run build.sh to compile quig. You can then move the quig binary to somewhere in 
 
 If your desktop environment supports it, you can associate .quig files with quig to run them by double-clicking them.
 
+The main way to load quig games on Linux is with run-quig.sh, which requires YAD to be installed. Alternatively, quig can be run directly from the command line.
+
 ===
 Usage:
 
-quig on Windows provides a simple script that allows you to select a game to run by simply opening run-quig.bat. It does not currently allow you to configure any options. Opening the script will allow you to choose a .quig file to play.
+On Windows, quig provides an easy-to-use interface known as quig-ui to create and edit games. Simply run quig-ui.exe.
+quig-ui requires .NET Core 3.1 and will prompt you to download it if it is not installed on the system.
+To load and play a game, go to 'Open existing game', select the .quig file you would like to play, and then click on 'Play game'. You can edit a game with 'Edit game code' and 'Edit game graphics', which will (by default) open up the .quig file in Notepad and the .png file in Paint respectively.
+If you would like to change the editors used, click on 'Configure editor settings' and select other programs with the 'Browse' buttons before selecting 'Save new settings'.
+quig-ui can be configured to be the default editor for .quig games by going to 'Configure editor settings' > 'Associate .quig files with quig-ui'.
 
-quig provides a slightly more advanced GUI for running games under Linux-based systems. The bash script run-quig.sh will allow you to graphically select a quig game and configure any options.
+On Linux, the Bash script run-quig.sh will allow you to graphically select a quig game and configure any options.
 When the game is exited, the GUI will reappear. Either select a game again or press cancel to exit.
-This interface has only been tested under Raspbian Linux so far, and requires YAD to be installed.
-On Raspbian, ($ is the prompt, don't type it!)
+This interface has only been tested under Raspberry Pi OS so far, and requires YAD to be installed.
+On Raspberry Pi OS, ($ is the prompt, don't type it!)
 	$ sudo apt install yad
 will install YAD if needed.
 It may run on other systems that provide YAD and bash. If you do not have YAD and bash installed or cannot install it (for example, on Windows), quig can be used as a command-line program.
 
-As mentioned in the Windows installation section, you can directly associate .quig files with quig-for-windows.exe on Windows systems. This makes using quig as easy as just double-clicking a .quig file to run games, although you won't be able to enable fullscreen mode or change the drawing mode settings this way.
-
-From the command line, games can be run as follows:
+If you cannot use quig-ui or run-quig.sh, you can still run games from the command line as follows:
 	$ quig mygame.quig
 where myname is the name of the game, and mygame.quig and mygame.png are together in the same folder.
 If mygame.quig has no errors and mygame.png can be loaded, the game will start.
@@ -90,7 +98,7 @@ The following command line arguments are supported:
 	--soft: full software drawing. This is the slowest option, but will run acceptably on the majority of systems, including my Raspberry Pi 2. The window maxes out at 3x internal resolution when using this mode.
 	--hard: hardware window drawing. Use this option if your monitor doesn't run at 60hz and you want a larger screen size. As of this writing, this is the default option.
 	--hard-vsync: hardware window drawing, timed to vertical sync. Generally the best option. Take note that quig is designed to run at 60fps, so using this on a display that runs faster or slower will cause games to run at entirely the wrong speed (such as on a 144hz display, running games more than twice as fast as intended).
-	--fullscreen: runs the game in windowed fullscreen mode. As of this writing, fullscreen mode does not preserve aspect ratio -- most screens are 4:3 or 16:9, and quig runs at a 5:3 (15:9) resolution.
+	--fullscreen: runs the game in windowed fullscreen mode. As of this writing, fullscreen mode unfortunately does not preserve aspect ratio -- most screens are 4:3 or 16:9, and quig runs at a 5:3 (15:9) resolution.
 	
 For example,
 	$ quig examples/astro-burst.quig --hard-vsync --fullscreen
@@ -122,25 +130,12 @@ If your controller isn't recognized, make sure that it is the only controller pl
 Future versions of quig may support custom controller or keyboard mappings.
 
 The F6 key on the keyboard allows you to take an unscaled screenshot in the current directory as quig-sshot.png. Take note that if the file already exists, it will be overwritten.
-The F8 key on the keyboard allows you to record a few seconds of gameplay as quig-vid.gif. Again, if the file already exists, it will be overwritten. The Back or Select key on a controller will also begin recording. Take note that the game will be unresponsive for some time after the recording is finished for a few moments as it saves the recording to disk.
+The F8 key on the keyboard allows you to record a few seconds of gameplay as quig-vid.gif. Again, if the file already exists, it will be overwritten. The Back or Select key on a controller will also begin recording. Take note that the game will be unresponsive for a few moments after the recording is finished as it saves the recording to disk.
 
 The Esc key immediately quits quig. 
 
 ===
-Compile:
-
-On Linux or via MSYS2, quig requires Lua 5.3, SDL2, SDL_mixer, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
-On Debian and Ubuntu based systems, ./deps-debian.sh will install the required dependencies for you.
-quig has been compiled on Windows with MSYS2, and ./deps-msys2.sh will install the required dependencies if you wish to build quig yourself.
-
-Run ./build.sh to compile quig. build.sh uses pkg-config to provide the correct compiler flags.
-
-On Windows with VS2019, the quig-for-windows.sln project is pre-configured to be ready to compile 32-bit x86 builds. 
-You will still need the .dll files for each of the libraries (available in dll-files.7z, or compilable  from source).
-
-
-===
-Development:
+Game development:
 
 All quig games have two mandatory functions: init() and step(). init() is called at the start of the game, and step() is called every frame.
 Both MUST be present, even if init is left empty.
@@ -150,6 +145,8 @@ Included with quig are various example files that range from simple tutorials on
 
 An empty.quig and empty.png file are in the examples folder, demonstrating the minimum requirements to create a quig program.
 empty.quig just has the two required functions, and empty.png is entirely filled with the transparent color (#FF00FF, 255,0,255).
+
+quig-ui can create a new, empty game for you: with no file loaded, click 'Create new game', choose a location to save to, and then click 'Create new quig game'.
 
 ===
 Command reference (it's quite short!):
@@ -214,39 +211,21 @@ Command reference (it's quite short!):
 	example: text(getfps(),0,0,1,0) --display the game's FPS at the top-left corner of the screen
 	
 provisional/deprecated commands:
-None of these commands should currently be used at all! All of them are very likely to be changed at any point due to changing design. If these commands remain in newer versions of quig, they may have entirely different parameters!
+None of these commands should currently be used at all.
+If these commands remain in newer versions of quig, they may have entirely different parameters!
 
-* playsong(id) [very likely to be changed!, reasonably tested]
-	Play a song with the given id, from 0-30. The song will not loop.
-	If another song is playing, it will be replaced.
-	Songs must be in the same folder as the game and have .songN.mp3 as an extension, where N is the id of the song.
-	For example, if the game is named 'my-game.quig', the song with id number 5 would be named 'my-game.song5.mp3'.
-	There is currently an inexplicable stutter when playing a song that has been stopped, whether by stopsong or by playing a different song, which may lead to a redesign of how sound works in quig, since it wraps SDL_Mixer somewhat thinly.
-	example: playsong(2) --play the song with id 2
-
-* loopsong(id) [very likely to be changed!, reasonably tested]
-	Nearly identical to playsong, but loops.
-	example: loopsong(0) --play the song with id 0, looping
-
-* stopsong() [very likely to be changed!, well tested]
-	Stops any playing song.
-
-* readfile() [very likely to be changed!, very little testing, be warned!]
-	Load save data for the game into a table of strings. Each table entry is one line.
-	The save data is currently the full name of the game file with .quigsav at the end. For example, for a game named 'my-game.quig', the saved data will be in 'my-game.quig.quigsav'. This is very likely to change in later releases to 'my-game.quigsav'.
-	example: savedata=readfile() --read the game's save data into a table named savedata
-
-* writefile(data) [very likely to be changed!, very little testing]
-	Write save data for the game. Pass a table of strings to it, and each string will be saved to its own line in the file.
-	Again, the save data is currently the full name of the game file with .quigsav at the end.
-	example: writefile(savedata) --write the table of strings named savedata into the game's save data.
-
-Other commands are:
-* playsound, loopsound, stopsound
-which deal in sound effects, and are also subject to change.
+* playsong
+* loopsong
+* stopsong
+* readfile
+* writefile
+* playsound
+* loopsound
+* stopsound
 
 reserved commands/names:
 These commands don't exist yet, but may be used at some point, so make sure your own functions aren't named the same!
+Don't use these in this version of quig!
 
 * rectcol()
 	rectangle-rectangle collision
@@ -264,7 +243,7 @@ These commands don't exist yet, but may be used at some point, so make sure your
 	get how long it took for the last frame to run, in milliseconds (under normal circumstances would report around 16.67)
 
 In addition, qu_* and quig.* are entirely reserved (eg, quig.spr() or qu_spr()).
-A future release of quig may prefix all of the commands so that there is no chance of existing games colliding.
+A future release of quig may prefix all of the commands so that there is no chance of a new quig version accidentally naming a function the same as one existing in your program.
 
 ===
 Constants reference:
@@ -282,11 +261,28 @@ Constants reference:
 	key_start
 
 ===
+Compiling quig:
+
+quig's source code is available at <https://github.com/bmdeeal/quig>.
+quig-ui's source code is available at <https://github.com/bmdeeal/quig-ui>.
+
+On Linux or via MSYS2, quig requires Lua 5.3, SDL2, SDL_mixer, and SDL_image for SDL2. quig is written in C++ and has been built with g++.
+On Debian and Ubuntu based systems, ./deps-debian.sh will install the required dependencies for you.
+quig has been compiled on Windows with MSYS2, and ./deps-msys2.sh will install the required dependencies if you wish to build quig yourself.
+
+Run ./build.sh to compile quig. build.sh uses pkg-config to provide the correct compiler flags.
+
+On Windows with VS2019, the quig-for-windows.sln project is pre-configured to be ready to compile 32-bit x86 builds. 
+You will still need the .dll files for each of the libraries (available in dll-files.7z, or compilable from source) to run quig.
+
+quig-ui is built using VS2019. After downloading the quig-ui sources, simply open quig-ui.sln and compile.
+
+===
 Future release to-do list:
 
 * hiragana text support (the font is loaded, but there isn't a good way to access it, maybe add control characters? I might make the control character ~, so avoid using it)
 * maybe add paletted versions of various commands? sprites still have no palette restriction, but you should be able to define a palette and not constantly have to do things like palette[2].r,palette[2].g,palette[2].b or directly inputting color codes over and over
-* although quig is a command-line program, a good front-end is a must, and the one that quig currently ships with isn't terribly good and also doesn't run on Windows (I currently am working on another project that acts as a universal front end for Windows applications that do not have a GUI, and I could alter it for specific use with quig)
+* quig-ui needs Linux support/testing
 * add option to force-run a game without a graphics file (likely with the position of the intended sprite overlaid?)
 * add a combined .quigpak format that puts the graphics and the game in the same file and provide a utility for packing/unpacking games
 
@@ -302,6 +298,7 @@ This doesn't guarantee security by any means, it just makes it so that a develop
 
 If a quig game lacks a graphics file, one workaround to run it is to simply rename another. examples/works-all.png is provided for this purpose. It's quite ugly, but it's made to be visible.
 In the future, there might be a quig option that generates a simple texture for this purpose.
+As of this writing, quig-ui will not load a .quig file that doesn't have an associated .png file. 
 
 ===
 Some musings:
@@ -332,15 +329,17 @@ I've moved to a Pi 4 from my old Pi 2 since starting quig. One major design deci
 
 Sound is implemented, but a: hasn't had much testing, and b: seems to have a few issues. SDL_Mixer seems to have issues with resuming stopped music. If I load the music files as ordinary sounds, I have no such issues, but quig then takes way longer to start up and loads all of that into memory at once.
 
-I hope you enjoy using quig as much as I do. It's simple, with just enough limitation to enforce a little bit of its own character on the results without stifling them. As I developed pop.drop'n, I found myself increasingly glad that I didn't enforce any palette limitations. The graphics I've drawn for my quig games largely use the rather nice Sweetie-16 palette, but ultimately, if something needed to be different, it could be. Also, particles. Full-color RGB particles, everywhere.
+I hope you enjoy using quig as much as I do. It's simple, with just enough limitation to enforce a little bit of its own character on the results without stifling them. As I developed pop.drop'n, I found myself increasingly glad that I didn't enforce any palette limitations. The graphics I've drawn for my quig games largely use the rather nice Sweetie-16 palette by GrafxKid (see <https://lospec.com/palette-list/sweetie-16> for details), but ultimately, if something needed to be different from those colors, it could be. Also, particles. Full-color RGB particles, everywhere.
 
-It might be redundant as a platform -- you can probably port quig games to something like TIC-80 semi-easily. Maybe. The quig command set is quite small, and only file saving wouldn't really mesh too well. quig's spr command could be easily implemented with two textri calls. Still, I had an idea of the look and style of games I wanted to be able to design with quig, and the various "fantasy console" platforms like TIC-80 and PICO-8 had certain restrictions or design elements that I didn't like that much. quig is its own thing, focusing on letting the user sling a bunch of scaled sprites around the screen like there's no tomorrow, easily.
+quig might be redundant as a platform -- you can probably port quig games to something like TIC-80 semi-easily, and there are a lot of other similar systems due to how easy it is to embed Lua. quig's spr command could be easily implemented with two textri calls.
+
+Still, I had an idea of the look and style of games I wanted to be able to design with quig, and the various "fantasy console" platforms like TIC-80 and PICO-8 had certain restrictions or design elements that I didn't like that much. quig is its own thing, focusing on letting the user sling a bunch of scaled sprites around the screen like there's no tomorrow, easily. It has restrictions that you may not like, but it is also intended to be somewhat more free-form than either TIC-80 or PICO-8.
 
 Also, I really wanted something I could run at the desktop. I might have been wrong, but at the time I started designing quig, TIC-80 required to be in full screen, since it used the hardware acceleration on the Pi 2 to draw, which didn't work under X11.
 
-Really, during the whole 2020 "stuck at home" deal, developing quig provided a nice way for me to write games that I could play on my Raspberry Pi 2. 
+During the whole 2020 "stuck at home" deal, developing quig provided a nice way for me to write games that I could play on my Raspberry Pi 2. 
 
-It was a good learning experience too. Embedding Lua was a surprisingly easy task, and it let me brush up on using SDL2, which was something I had done before, but not in any particularly major project.
+It was a good learning experience too. Embedding Lua was a surprisingly easy task, and it let me brush up on using SDL2, which was something I had done before, but not in any particularly major project. In addition, writing the front-end utilities to make it nicer to load .quig games has let me stay a bit sharper regarding GUI based development, since quig itself is command-line based.
 
 It's been quite fun working on this, and I hope you have fun using it too.
 
