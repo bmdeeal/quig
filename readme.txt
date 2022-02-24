@@ -98,7 +98,7 @@ The following command line arguments are supported:
 	--soft: full software drawing. This is the slowest option, but will run acceptably on the majority of systems, including my Raspberry Pi 2. The window maxes out at 3x internal resolution when using this mode.
 	--hard: hardware window drawing. Use this option if your monitor doesn't run at 60hz and you want a larger screen size. As of this writing, this is the default option.
 	--hard-vsync: hardware window drawing, timed to vertical sync. Generally the best option. Take note that quig is designed to run at 60fps, so using this on a display that runs faster or slower will cause games to run at entirely the wrong speed (such as on a 144hz display, running games more than twice as fast as intended).
-	--fullscreen: runs the game in windowed fullscreen mode. As of this writing, fullscreen mode unfortunately does not preserve aspect ratio -- most screens are 4:3 or 16:9, and quig runs at a 5:3 (15:9) resolution.
+	--fullscreen: runs the game in windowed fullscreen mode.
 	
 For example,
 	$ quig examples/astro-burst.quig --hard-vsync --fullscreen

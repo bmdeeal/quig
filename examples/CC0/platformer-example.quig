@@ -11,28 +11,52 @@
 	It works reasonably well, but has an actual, literal corner case that is handled in a very ugly and somewhat awkward way.
 	Fixing this is currently left as an exercise to the reader. :P
 	
-	This game also massively calls into question the decision in quig to make the standard sprite drawing offset the center, since it needs to be accounted for, but any choice of a default offset would cause issues with different types of games.
+	This game calls into question the decision in quig to make the standard sprite drawing offset the center, since it needs to be accounted for... but any choice of a default offset would cause issues with different types of games.
 	
-	TODO LIST (for me, although you'll want to fix them if you're using this example):
-	* handle object types properly (we could generate a table in the collision check, and you can just check if the object type number is true)
-	* deal with the corner case properly/re-implement collision resolution for walls
+	---
 	
 	IDEAS TO TRY (for the reader possibly, unless I decide to throw these in):
 	* animation -- just change the player sprite every few frames
 	* jump forgiveness -- if you're not on a platform, add a few frames where you can jump in mid air, like a cartoon character that hasn't realized that it's falling
 	* semi-solid platforms -- if you're moving downwards from above, they're solid, but otherwise, the player can ignore them
 	* moving platforms -- update the player's position as they move
-	* zooming camera -- zoom the camera in/out dynamically? this one may have issues with tile positioning gaps, but it's worth a try, and you could draw tiles slightly larger than normal to counteract that
+	* scrolling camera -- think of the camera in Sonic CD, how it smoothly shifts to view more of the level when you've been moving for a while, and re-centers when you slow back down
+	* zooming camera -- alternatively, zoom the camera in/out dynamically? this one may have issues with tile positioning gaps, but it's worth a try, and you could draw tiles slightly larger than normal to counteract that
 --]]
 
 --is the game paused?
 paused=false
 
 --get whether a number is negative (returns -1), positive (returns 1), or zero (returns 0)
+--still don't know why this isn't in the lua math.* library
 function sign(n)
 	if n>0 then return 1 end
 	if n<0 then return -1 end
 	return 0
+end
+
+--limit a value from 0-255, rounded down
+function clamptobyte(c)
+	return math.floor(math.max(0,math.min(255,c)))
+end
+
+--draw a fullscreen linear gradient between two colors
+function gradient_bg(r1,g1,b1,r2,g2,b2)
+	local width=2 --thinner width looks better, but is slower
+	local bands=math.ceil(view_height/width) --how much we need to loop
+	local rs, gs, bs = (r2-r1)/bands, (g2-g1)/bands, (b2-b1)/bands --how much to change each color over the loop
+	for ii=0,bands do
+		rect(
+			0,
+			width*ii,
+			view_width,
+			width,
+			clamptobyte(r1),
+			clamptobyte(g1),
+			clamptobyte(b1)
+		)
+		r1, g1, b1= r1+rs, g1+gs, b1+bs
+	end
 end
 
 --tiles to draw on screen
@@ -52,30 +76,60 @@ tiles.init=function(self)
 end
 
 --add a tile
---offset is how far from the next tile (0 is reasonable, negative numbers aren't) that this one should be placed (in tile widths, scaled)
---offset should probably be 1 usually
---this ensures that adding stuff to a level shifts it around, and also ensures that once we find a tile that's off-screen, we can just stop
---ypos is just the y position
---kind is what object number to add
+--offset is how far from the next tile, in 16x16 spaces
+--ypos is spaces from the bottom of the screen, again in 16x16 spaces
+--scale is the size of the block -- 1 is 16x16, 2 is 32x32, etc, etc
+--offset and ypos are still floating point numbers, so you can still do offsets
+--kind is what object type to add (see list below)
+tiles.typeBlock=0
+tiles.typeSpring=1
+tiles.typeGoal=2
 tiles.add=function(self, offset, y, scale, kind)
 	if kind==nil then kind=0 end
 	if scale==nil then scale=1 end
+	self:addOffset(offset*16)
 	self.count=self.count+1
-	self:addOffset(offset*(16*scale)) --quig sprites are 16x16 at 1x scale
 	self.map[self.count]={
 		--undo the center offset -- quig sprites are drawn centered, this shifts back to the top-left corner
-		x=self.x_offset-8*scale,
-		y=y-8*scale,
+		x=self.x_offset+8*scale,
+		y=(view_height-(y*16+8*scale)),
 		--set the kind, but we set the texture offset elsewhere
 		kind=kind,
+		---current sprite
 		tx=1,
 		ty=0,
+		--sprite to use when not colliding
+		tx1=1,
+		ty1=0,
+		--sprite to use when colliding (eg, springs)
+		tx2=1,
+		ty2=0,
+		--timer before resetting the sprite
+		spr_time=0,
+		spr_time_max=4,
 		--you probably shouldn't use non-integer scales for tiles (it looks ugly and will have positioning issues), but it's not enforced
 		scale=scale
 	}
+	target=self.map[self.count]
+	--set the sprites for each object type
+	--look for "tiles.type" to find the list in this file
+	if kind==tiles.typeSpring then
+		target.tx1=3
+		target.ty1=0
+		target.tx2=4
+		target.ty2=0
+	elseif kind==tiles.typeGoal then
+		target.tx1=2
+		target.ty1=0
+		target.tx2=2
+		target.ty2=0
+	--elseif kind==tiles.type... then
+	end
+	target.tx=target.tx1
+	target.ty=target.ty1
 end
 
---adjust the offset for the next tile
+--add to the offset for the next tile, in pixels
 tiles.addOffset=function(self, offset)
 	self.x_offset=self.x_offset+offset
 end
@@ -83,39 +137,68 @@ end
 --draw all the tiles
 --TODO: stop drawing tiles that are off screen
 tiles.draw=function(self)
+	--loop through and draw each tile
 	for ii=1,self.count do
+		other=self.map[ii]
 		spr(
-			self.map[ii].x+self.x,
-			self.map[ii].y+self.y,
-			self.map[ii].scale,
-			self.map[ii].tx,
-			self.map[ii].ty
+			other.x+self.x,
+			other.y+self.y,
+			other.scale,
+			other.tx,
+			other.ty
 		)
+		--only update the on-collision animation if we aren't paused
+		if not paused then
+			if other.spr_time>0 then
+				other.spr_time=other.spr_time-1
+			else
+				other.tx=other.tx1
+				other.ty=other.ty1
+			end
+		end
 	end
 end
 
---setup levels
+--handle levels
 --there is really only one level, but it's setup as if there were more
+--tiles:add has 4 parameters (all units are multiples of 16px):
+--> offset from previous object
+--> offset from bottom of screen
+--> scale of object
+--> type of object, can be omitted to place a wall (tiles.typeBlock)
 levels={}
 levels[1]=function()
 	tiles:init()
-	tiles:add(1,128,2)
-	tiles:add(1,128,2)
-	tiles:add(0,96,1)
-	tiles:add(1,128,2)
-	tiles:add(1,80)
-	tiles:add(1,72)
-	tiles:add(3,72)
-	tiles:add(2,96,2)
-	tiles:add(2,80,2)
-	tiles:add(2.5,80,2)
-	tiles:add(1,80,2)
-	tiles:add(2,96,2)
-	tiles:add(3,88,1)
-	tiles:add(2,96,2)
-	tiles:add(3,72,1)
-	tiles:add(2,96,2)
-	tiles:add(3,88,1)
+	tiles:add(0,0,4)
+	tiles:add(4,0,4)
+	tiles:add(4,0,2)
+	tiles:add(1,2,1,tiles.typeSpring)
+	tiles:add(3,1,2)
+	tiles:add(3,2,2)
+	tiles:add(0,4,1,tiles.typeSpring)
+	tiles:add(3,1,2)
+	tiles:add(2,0,2)
+	tiles:add(2,0,2)
+	tiles:add(0,4,1)
+	tiles:add(2,0,2)
+	tiles:add(2,0,2)
+	tiles:add(2,2,2)
+	tiles:add(0,0,2)
+	tiles:add(2,4,2)
+	tiles:add(0,2,2)
+	tiles:add(0,0,2)
+	tiles:add(3.5,1,2)
+	tiles:add(0,3,1,tiles.typeSpring)
+	tiles:add(3,3,1)
+	tiles:add(2.25,3,tiles.typeSpring)
+	tiles:add(2.25,2,tiles.typeSpring)
+	tiles:add(2.25,1,tiles.typeSpring)
+	tiles:add(3,0,4)
+	tiles:add(6,1,4)
+	tiles:add(6,0,4)
+	tiles:add(2,4,2,tiles.typeGoal)
+	tiles:add(2,0,4)
+	tiles:add(4,0,4)
 end
 
 --player character
@@ -135,10 +218,10 @@ player.init=function(self)
 	self.xd=0
 	self.yd=0
 	--physics
-	self.gravity=0.35 --fall speed
+	self.gravity=0.30 --fall speed
 	self.friction=0.125 --only affects horizontal speed
 	self.max_speed_x=1.5
-	self.max_speed_y=4
+	self.max_speed_y=5.5
 	self.accel=0.25 --how fast to accelerate horizontally, must overcome friction
 	self.jump_strength=3 --how much to move by each frame during a jump
 	self.jump_time=0 --how long you've held a jump
@@ -147,11 +230,27 @@ end
 
 --handle player movement, collision, and physics
 player.update=function(self)
-	--handle physics
-	if self:checkCollide(0,1) >=0 then
+	--handle collisions with other objects
+	local others=self:getCollisions(0,0)
+	--bounce off of springs
+	--TODO: kinda want to make it so that you move at a slower, but fixed rate upwards vs just immediately being launched
+	if others[tiles.typeSpring] then
+		self.yd=-5.5
+	end
+	--reset on hitting the goal
+	if others[tiles.typeGoal] then
+		init()
+		return
+	end
+	--check if we're standing on the ground
+	if self:getCollisions(0,1)[0] then
 		self.ground=true
 	else
 		self.ground=false
+	end
+	--check if we've bounced off the ceiling (also, don't bother allowing jumping if there's no room)
+	if self:getCollisions(0,-1)[0] then
+		self.jump_time=0
 	end
 	--move left/right
 	if key(key_left)>0 then
@@ -195,31 +294,44 @@ player.update=function(self)
 	if self.yd < -self.max_speed_y then
 		self.yd=-self.max_speed_y
 	end
+	--we save the sign of each direction for use when resolving the corner case 
+	local xds = sign(self.xd)
+	local yds = sign(self.yd)
 	--resolve collision with walls -- we just check if the space we're about to enter is a wall, and if so, we inch towards, pixel-by-pixel
 	--horizontally
-	if self:checkCollide(self.xd, 0) >= 0 and sign(self.xd) ~=0  then
-		while (self:checkCollide(sign(self.xd),0) < 0 ) do
+	if self:getCollisions(self.xd, 0)[0] and sign(self.xd) ~=0  then
+		while (not self:getCollisions(sign(self.xd),0)[0]) do
 			self.x=self.x+sign(self.xd)
 		end
 		self.xd=0
 	end
 	--vertically
-	if self:checkCollide(0, self.yd) >= 0 and sign(self.yd) ~=0  then
+	if self:getCollisions(0, self.yd)[0] and sign(self.yd) ~=0  then
 		self.y=math.floor(self.y) --if you don't do this, there's sometimes a gap between the player and the floor; there is almost certainly a similar glitch with horizontal movement that is less noticeable
-		while (self:checkCollide(0,sign(self.yd)) < 0 ) do
+		while (not self:getCollisions(0,sign(self.yd))[0]) do
 			self.y=self.y+sign(self.yd)
 		end
 		self.yd=0
 	end
 	--solve the literal corner case (eg, when you hit the corner of a block)
-	--just jump back to the last safe location if we're still colliding with an object
-	--jarring, but prevents the player from sticking on corners
-	if self:checkCollide(0,0) < 0 then
+	--a bit jarring, but prevents the player from getting stuck on corners
+	--TODO: there's a better way to handle this
+	if self:getCollisions(0,0)[0] then
+		--if we're stuck in a wall and weren't moving for whatever reason, jump to the most recent safe position
+		if xds==0 and yds==0 then
+			self.x=self.xprev
+			self.y=self.yprev
+		--otherwise, move out from the collision, roughly based on the last movement direction
+		else
+			while self:getCollisions(0,0)[0] do
+				self.x=self.x-xds
+				self.y=self.y-yds
+			end
+		end
+	--save the last safe position	
+	else
 		self.xprev=self.x
 		self.yprev=self.y
-	else
-		self.x=self.xprev
-		self.y=self.yprev
 	end
 	--update player position after all is done
 	self.x=self.x+self.xd
@@ -228,12 +340,12 @@ player.update=function(self)
 	if (self.ground) then
 		self.jump_time=self.jump_max
 	end
-	--clamp position horizontally
+	--clamp position horizontally against the left side of the screen
 	if self.x<8 or self.x-self.xd<8 then --the magic number 8 here is is half the width of a quig sprite, which is 16x16, and sprites are positioned by their center
 		self.x=8
 		self.xd=0
 	end
-	--restart game when 
+	--restart game when falling out of the level
 	if self.y>view_height+8 then
 		init()
 	end
@@ -243,20 +355,26 @@ end
 
 --check the list of tiles for a collision
 --offset_x/y are how far to shift from the player's position, in pixels
---returns -1 on failure, or the type of tile on success
---TODO: this checks every single tile and we really don't need to
-player.checkCollide=function(self,offset_x,offset_y)
+--returns a table with the tile numbers that are being collided as keys along with a .empty key
+-- .empty will be true if nothing was collided with, false otherwise
+player.getCollisions=function(self,offset_x,offset_y)
+	result={empty=true}
 	if offset_x==nil then offset_x=0 end
 	if offset_y==nil then offset_y=0 end
-	--cycle through all tiles, if we get a hit, say what we hit
-	--note: this also means that if you're hitting multiple types of thing, this won't tell you (TODO: actually, this should probably be modified to only check one type of thing!)
-	--we could have a bitmask with what types of objects we're colliding, or store 
+	--cycle through all tiles, get what type of tile we hit
 	for ii=1,tiles.count do
-		if squcol(self.x+offset_x,self.y+offset_y,1,tiles.map[ii].x,tiles.map[ii].y,tiles.map[ii].scale) then
-			return tiles.map[ii].kind
+		local other=tiles.map[ii]
+		if squcol(self.x+offset_x,self.y+offset_y,1,other.x,other.y,other.scale) then
+			--store in the list
+			result[other.kind]=true
+			result.empty=false
+			--change the sprite
+			other.tx=other.tx2
+			other.ty=other.ty2
+			other.spr_time=other.spr_time_max
 		end
 	end
-	return -1
+	return result
 end
 
 --draw the player object
@@ -272,11 +390,12 @@ end
 
 --main game loop, gets called every frame
 function step()
-	--clear the screen, (red, green, blue)
-	cls(0,4,12)
-	--draw text (string, x-position, y-position, scale, drawing mode [0 is white on black, 1 is black on white, 2 is white on transparent, and 3 is black on transparent])
-	text("quig platform game example", 0,0, 1, 3)
+	--draw a nice sky gradient
+	gradient_bg(255,255,224,32,96,204)
+	--draw the sample text
+	text("quig platform game example", 0,0, 1, 2)
 	--update the game only if we're not paused
+	--if we had a separate update step for tiles, we'd put that in here too
 	if not paused then
 		player:update()
 	end

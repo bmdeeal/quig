@@ -16,47 +16,29 @@
 	* really should get this building on Windows with something other than MSYS2 so I don't need to distribute a gazillion DLLs
 	  quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
 	  EDIT: we can build with Visual Studio now, although we don't build the dependencies ourselves
-	* audio should be a compile-time option, I think there was some work done on that
+	* everything about audio is in flux and I don't know if we're even 
 	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
 	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
 	* proper analog stick direction check -- it is way too easy to hit diagonal inputs on accident, we should check based on the angle rather than just an x/y check
 	* the GIF saving needs to show progress or something (maybe? on my current desktop, it's entirely seamless, but I remember it pausing badly on my laptop and the Pi)
-	
-	per-version TODO:
-	for 1.1-release:
-	* document audio playback and file saving, provide proper examples (in progress!)
-	
-	for 1.2-alpha:
 	* should refactor input handling, it's a mess and it doesn't need to be 
 	* really should give a look over the API so we don't do wild, breaking changes once we get to a not-beta release
 	  in particular, we should implement support for multiple controllers
 	  might just modify the API to take an optional controller parameter
-	* file reading/writing isn't particularly well tested at all
-	
-	for 1.3:
+	* file reading/writing isn't particularly well tested at all and is potentially in flux
 	* user configurable deadzone for analog stick
-	* really need to check on squcol, need to make an example game with it that needs actually precise collision
-	  I miiight have like an off-by-one error or something, dunno
 	* there are gaps in non-integer-scale text, should really just draw a little bit beyond the character if there's another character after (at least, for the filled modes of course)
 	  or honestly just draw the backgrounds separately
-	* have quig go through a list of other supported formats for audio files
-	  we currently just use WAV and MP3 since this is designed to be simple, rather than flexible (and various formats may/may not have support depending on platform)
-	  but I really do want to have Opus support since Opus files can be really tiny while not sounding awful
-	
-	for 1.4:
 	* spr_xys and squ_xys with separate x/y scale (VERY easy, just need to do it)
 	* hiragana text support -- the characters are in the font, but you just can't really access them nicely
 	* user-adjustable screen scale
+	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions
+	
+	possible TODOs:
 	* selectable gif export length? or at least make it so that it can be ended early (eg, pressing select again)
 	* frame blending option during display (we do this during gif export, so it should be reasonable as a runtime option)
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
 	* sprbig, sprbig_xys -- draws 4 sprites at once (puts 'em in a 32x32 surface, then scales that), takes a table with which entries to draw? dunno about this really
-	
-	for 1.5 and beyond:
-	* more examples (in-progress)
-	* a better front-end, or at least one that works on Windows without lots of configuration (I am working on a project for Windows called ezLoadGUI, and I should probably provide a pre-configured version alongside quig)
-	* config file (eg, default video settings, etc)
-	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions
 	
 	other potential features:
 	* add blending layer?
@@ -89,7 +71,7 @@ extern "C" {
 #include "quig.h"
 
 //constants
-const char *QUIG_VERSION="1.1-beta2a"; //version string -- major.minor-status
+const char *QUIG_VERSION="1.1-beta2b"; //version string -- major.minor-status
 const int QUIG_DEBUG = 1; //TODO: compile script flag for this
 const int FPS_RATE = 60; //quig runs at a fixed 60fps, period
 const int FPS_TICKS = (1000 / FPS_RATE);
@@ -610,6 +592,7 @@ lua_State *L;
 
 //setPixel -- plot a single pixel to a surface
 //no idea why this isn't a SDL built-in in some way
+//TODO: expose this to lua code
 void setPixel(SDL_Surface *target, int x, int y, Uint32 color) {
 	Uint32 *px = (Uint32 *)target->pixels;
 	px[y*target->w+x]=color;
@@ -870,7 +853,7 @@ int c_rect(lua_State *LL) {
 
 //do_spr -- draw a scaled sprite, centered at a point
 void do_spr(int x, int y, double scale, int sx, int sy) {
-	SDL_Rect source_size, target_size;
+	SDL_Rect source_size, target_size, temp_size;
 	//bounds check -- the sprite sheet is only 128x128
 	if (sx >= 8 || sy >= 8 || sx < 0 || sy < 0) {
 		return;
@@ -885,7 +868,28 @@ void do_spr(int x, int y, double scale, int sx, int sy) {
 	target_size.h = 16*scale;
 	target_size.x = x-(target_size.w/2);
 	target_size.y = y-(target_size.h/2);
-	SDL_BlitScaled(sprites, &source_size, program_surface, &target_size);
+	//temporary buffer size
+	temp_size.w=target_size.w;
+	temp_size.h=target_size.h;
+	temp_size.x=0;
+	temp_size.y=0;
+	//we create a surface that's exactly the right size for a scaled sprite, removing any issues with screen border clipping
+	//we also only bother with this for sprites on the screen edge
+	//this might be slower by a bit
+	SDL_Surface *scale_temp = NULL;
+	if (target_size.x < 0 ||target_size.x+target_size.w > VIEW_WIDTH || target_size.y < 0 ||target_size.y+target_size.h > VIEW_HEIGHT) {
+		scale_temp=SDL_CreateRGBSurface(0, temp_size.w, temp_size.h, 32, 0,0,0,0);
+	}
+	if (scale_temp) {
+		SDL_FillRect(scale_temp, &temp_size, SDL_MapRGB(scale_temp->format, 0xFF, 0x00, 0xFF));
+		SDL_BlitScaled(sprites, &source_size, scale_temp, &temp_size);
+		SDL_SetColorKey(scale_temp, SDL_TRUE, SDL_MapRGB(scale_temp->format, 0xFF, 0x00, 0xFF));
+		SDL_BlitSurface(scale_temp, &temp_size, program_surface, &target_size);
+		SDL_FreeSurface(scale_temp);
+	}
+	else {
+		SDL_BlitScaled(sprites, &source_size, program_surface, &target_size);
+	}
 }
 //c_spr -- run do_spr from Lua code
 int c_spr(lua_State *LL) {
@@ -1068,6 +1072,7 @@ int c_stopsong(lua_State *LL) {
 }
 
 //updateScreen -- 
+//TODO: maintain aspect ratio
 void updateScreen() {
 	//just blit the surface to the window in software modes
 	if (display_mode==DisplayMode::soft) {
@@ -1076,8 +1081,49 @@ void updateScreen() {
 	}
 	//filthy hack that works, generate a texture every frame from the surface
 	else {
+		int w=VIEW_WIDTH;
+		int h=VIEW_HEIGHT;
+		SDL_GetRendererOutputSize(renderer, &w, &h);
+		SDL_Rect target_size;
+		target_size.x=0;
+		target_size.y=0;
+		target_size.w=w;
+		target_size.h=h;
+		double aspect_ratio_quig=(double)VIEW_WIDTH/VIEW_HEIGHT;
+		double aspect_ratio_display=(double)w/h;
+		/*
+		640x480 -> 1280x720
+		4/3 -> 16/9
+		4/3 < 16/9, so we alter the 1280 and preserve the 720
+		1280 / (16/9) -> 960x720 (4:3)
+
+
+		1280x720 -> 640x480
+		16/9 -> 4/3
+		16/9 > 4/3, so we preserve the 640 and alter the 480
+		480 / (4/3) -> 640x360
+
+		1280x720 -> 1280x960
+		16/9 -> 4/3, preserve the 1280, alter the 960
+
+		*/
+		std::cout << "q" << aspect_ratio_quig << "d" << aspect_ratio_display << "\n";
+		if (aspect_ratio_quig > aspect_ratio_display) {
+			target_size.h = ((double)target_size.w / aspect_ratio_quig);
+			target_size.y = (h - target_size.h) / 2;
+		}
+		else if (aspect_ratio_display > aspect_ratio_quig) {
+			target_size.w = ((double)target_size.h * aspect_ratio_quig);
+			target_size.x = (w - target_size.w) / 2;
+		}
+		std::cout << "w" << target_size.w << "h" << target_size.h << "\n";
+		/*else if (aspect_ratio_screen < aspect_ratio_target) {
+			target_size.w = ((double)target_size.w / aspect_ratio_target);
+			target_size.x = (w - target_size.w) / 2;
+		}*/
 		SDL_Texture *scr = SDL_CreateTextureFromSurface(renderer, program_surface);
-		SDL_RenderCopy(renderer, scr, NULL, NULL);
+		SDL_RenderClear(renderer);
+		SDL_RenderCopy(renderer, scr, NULL, &target_size);
 		SDL_RenderPresent(renderer);
 		SDL_DestroyTexture(scr);
 	}
@@ -1516,7 +1562,7 @@ int main(int argc, char* argv[]) {
 		//handle held-down keys:
 		inputs.update();
 		//read and merge controller inputs with keyboard inputs
-		//I've only tested an off-brand Xbone controller under linux so far, so this might be broken with other configs
+		//seems to work fine with Xbox and PS3 controllers on Linux out of the box
 		//yeah, this whole pile is kinda awful and I hate it
 		if (controller) {
 			controllerState.readState();

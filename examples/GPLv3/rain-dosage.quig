@@ -1,6 +1,6 @@
 --rain:dosage
 -- rain:dosage -- a "danmaku" style game where you have to survive various boss barrages
--- rain:dosage is (C) 2020 B.M.Deeal. rain:dosage is distributed under the GPLv3.
+-- rain:dosage is (C) 2020-2022 B.M.Deeal. rain:dosage is distributed under the GPLv3.
 
 -- This file expects word-wrapping and a tab width of 4.
 
@@ -14,6 +14,15 @@
     If not, see <https://www.gnu.org/licenses/>.
 --]]
 
+--[[
+	-About-
+	rain:dosage is a game about dodging a storm of bullets. 
+	
+	TODO:
+	* more patterns
+	* actual graphics
+	* more everything, really
+--]]
 
 
 --small shorthands
@@ -309,6 +318,7 @@ state.paused.update=function(this)
 	text("game\nis\npaused",4,4,2,0)
 end
 
+--draw the heads up display on the right side of the screen
 function drawhud()
 	local le=view_height+4 --left edge
 	local ttop=18 --top edge
@@ -318,11 +328,13 @@ function drawhud()
 	local count=36
 	local yy=0
 	local spacing=view_height/count
+	--draw a gradient background
 	for ii=0,count-1 do
 		local col=hudlo+(hudhi-hudlo)*ii/count
 		rect(view_height,yy,view_width-view_height,spacing+1,col, col/2, col*1.5)
 		yy=yy+spacing
 	end
+	--draw the player info
 	text("rain:dosage", view_height+4,4,1,0)
 	text(string.format("score:\n %09d0", score), le, ttop,1,3)
 	text("time:\n "..t2str(time),le,ttop+tspace,1,3)
@@ -330,6 +342,7 @@ function drawhud()
 	text(string.format("bombs:\n %d", bombs), le, ttop+tspace*3, 1,3)
 end
 
+--run each game state, update timers
 function step()
 	state.current:update()
 	flip=-flip

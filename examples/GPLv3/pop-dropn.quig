@@ -1,5 +1,5 @@
 -- pop.drop'n -- a simple 2D platform game where you bounce around and try and reach the end
--- pop.drop'n is (C) 2020 B.M.Deeal. pop.drop'n is distributed under the GPLv3.
+-- pop.drop'n is (C) 2020-2022 B.M.Deeal. pop.drop'n is distributed under the GPLv3.
 
 -- This file expects word-wrapping and a tab width of 4.
 
@@ -40,21 +40,22 @@
 	If you run out of lives, you'll have to start the game over!
 
 	TODO:
-	* shrink "dangerous" object hitboxes a bit (maybe add a hitsize parameter to objects?)
 	* more levels (8 stages, 3 rounds each)
 	* more objects
-	* more enemy actions (moving left/right, )
+	* more object actions (moving left/right, following the player, teleporting in/out)
 	* goal
-	* scoring (handle this at the end of level -- basically, just do some kind of time+perfect bonus+bonus based on how few times you got hit)
+	* scoring (handle this at the end of level -- basically, just do some kind of time+perfect bonus+bonus based on how few times you got hit, should also track whether you got all the stars, popped all the balloons, and hit all the enemies)
 	* attract mode? heck, it could even explain the story and controls and the lot
-	* how to play screen (like on Neo Geo games, but hopefully a bit more useful)
+	* how to play screen (like on Neo Geo games, but hopefully a bit more useful; really needs to explain how you only attack when you're falling)
 	* find all the other TODO items and clean them up
 --]]
 
-
+--general table of colors
 --TODO: any sort of color constants/generators should be part of this
 colors={}
+--colors for when picking up stars
 colors.star={r=200,g=170,b=120}
+--generate colors for jump sparks
 colors.jump=function()
 	local range=60
 	local offset=128
@@ -115,14 +116,14 @@ function zsort(a,b)
 end
 
 --clouds, positioned in 3D space
---had them scaled properly in 3D space too, but it looked uglier than just integer scaling since they're always at the same scale
+--had them scaled properly in 3D space too, but it looked uglier than just integer scaling
 clouds={}
 clouds.init=function()
 	clouds.max=7
 	local big=math.random(1,clouds.max)
 	for ii=1,clouds.max do
 		clouds[ii]={}
-		this=clouds[ii]
+		local this=clouds[ii]
 		--some clouds are bigger
 		this.size=1
 		local yesbig=(ii+big)%clouds.max
@@ -136,10 +137,10 @@ clouds.init=function()
 	table.sort(clouds, zsort)
 end
 --move the clouds based on where the player is
---TODO: should maybe refactor this to operate based on the camera position, so I can use the clouds other than in-level/do some hacky garbage with the player object
+--TODO: should maybe refactor this to operate based on the camera position, so I can use the clouds somewhere other than in a level without having to do some hacky garbage with the player object
 clouds.update=function()
 	for ii=1,clouds.max do
-		this=clouds[ii]
+		local this=clouds[ii]
 		--clouds scroll around, wrapped at the screen edges
 		--TODO: maybe generate a new Y position?
 		local wrap=16*this.size
@@ -151,18 +152,17 @@ end
 --put some clouds on screen
 clouds.draw=function()
 	for ii=1,clouds.max do
-		this=clouds[ii]
+		local this=clouds[ii]
 		spr(this.x, this.y, this.size,0,1)
 	end
 end
 
 --level handling
+--normal levels are positive, extra levels are negative, 0 is the end of the game
 levels={}
 levels[1]={}
-levels["extra"]={}
+levels[-1]={}
 
-levels.create={}
-levels.count=1
 --keeps track of the next place to put an item
 --takes the offset, y position, type, scale, and action
 levels.add=function(o,y,t,s,a)
@@ -191,20 +191,20 @@ levels.stress=function()
 end
 
 --goal
---TODO: goal
 levels.ending=function()
 	levels.add(48,120,"bounce",2)
 	levels.add(48,120,"bounce",2)
 	levels.add(48,120,"bounce",2)
 	levels.add(48,120,"bounce",3)
+	levels.add(56,80,"goal",2)
 	print("items:"..levels.warnc)
 end
 
 
---extra level
-levels["extra"].text="extra stage\nround 0"
-levels["extra"].next=""
-levels["extra"].create=function()
+--extra level, currently just an idea testbed for what crazy things I can throw in regarding stage design
+levels[-1].text="extra stage\nround 0"
+levels[-1].next_stage=0
+levels[-1].create=function()
 	levels.intro()
 	---[[
 	levels.add(72, 80, "bounce", 1, hover)
@@ -273,15 +273,20 @@ end
 
 
 levels[1].text="stage 1\nround 1"
---TODO: rework a bit (that wavy bit, despite being easy, is probably a bit overwhelming for so early in the level
+levels[1].next_stage=-1
+--TODO: rework a bit (that wavy bit, despite being fairly easy, is probably a bit overwhelming for so early in the level and so early in the game
 levels[1].create=function()
 	--intro segment
 	levels.intro()
 	--main level
 	
+	levels.add(75,120,"bounce",2,hovermild)
+	levels.add(35,120,"bounce",2,hovermild)
+	levels.add(35,120,"bounce",2,hovermild)
+	
 	levels.add(48,30,"enemy1")
 	levels.add(48,80,"bounce",2)
-	levels.add(64,120,"bounce",2)
+	levels.add(64,120,"bounce",2,hover)
 	levels.add(48,70,"spike")
 	levels.add(0,30,"star")
 	levels.add(0,110,"star")
@@ -293,6 +298,7 @@ levels[1].create=function()
 	levels.add(70,100,"bounce")
 	levels.add(60,100,"balloon",2)
 	levels.add(70,100,"bounce")
+	levels.add(0,40,"left",1,hover)
 	levels.add(70,100,"balloon")
 	
 	levels.add(50,110, "bounce", 2)
@@ -303,10 +309,14 @@ levels[1].create=function()
 	levels.add(50,20, "left", 2)
 	levels.add(50,110, "bounce", 2)
 	
+	levels.add(35,120,"bounce",2,hover)
+	levels.add(35,120,"bounce",2,hover)
+	levels.add(35,120,"bounce",2,hover)
 	
 	levels.add(70,120,"bounce",1,hover)
 	levels.add(35,120,"balloon")
 	levels.add(35,120,"bounce",2,hover)
+	
 	levels.add(35,120,"balloon")
 	levels.add(35,120,"bounce",1,hover)
 	levels.add(0,50,"enemy1",1,hover)
@@ -322,7 +332,7 @@ levels[1].create=function()
 	levels.add(20,90,"spike",2)
 	levels.add(60,120,"balloon",2)
 
-	--TODO: checkpoints, goal
+	--TODO: checkpoints (?), goal
 	levels.ending()
 	--levels.stress()
 end
@@ -356,6 +366,7 @@ player.init=function()
 	player.xcheck=0
 	player.ycheck=0
 end
+
 --generate single particles for jump related stuff (also, balloons)
 function jumpburst(x,y,mul)
 	if not mul then mul=1 end
@@ -391,7 +402,6 @@ function hsv2rgb(h,s,v)
 	end
 	return {r=(rr+m)*255, g=(gg+m)*255, b=(bb+m)*255}
 end
-
 
 --create a two-layered explosion
 function explode(x,y,mul,count, color)
@@ -450,7 +460,7 @@ player.update=function()
 		player.ctrl_lock=player.ctrl_lock-1
 	end
 	
-	--jump (you can still jump when controls locked)
+	--jump (you can still jump with controls locked)
 	if player.jump then
 		if key(key_a)==1 or key(key_b)==1 then
 			local jumpheight=2.5
@@ -547,6 +557,10 @@ objs.draw=function()
 		local scale=this.s*this.sc*16
 		if this:visible() then
 			spr(objs[ii].x-camera.x, objs[ii].y-camera.y, this.s*this.sc, objs[ii].tx, objs[ii].ty)
+			--debug view (warning, flashes miserably)
+			if debugcol_on and t%20>10 then
+				squ(objs[ii].x-camera.x, objs[ii].y-camera.y, this.cs, 0,255,0)
+			end
 		end
 	end
 end
@@ -608,7 +622,9 @@ end
 --add a new object if there's space in the table
 objs.add=function(nx,ny,ntype,ns,naction)
 	--shrink hitbox for particularly dangerous objects
-	local fairscl=0.8
+	local fairscl=0.6
+	--shrink hitbox for left/right bumpers
+	local lrscl=0.8
 	--default scale
 	if not ns then ns=1 end
 	--default action (nothing)
@@ -624,8 +640,9 @@ objs.add=function(nx,ny,ntype,ns,naction)
 			this.y=ny
 			this.type=ntype
 			this.action=none
+			this.baseaction=none
 			this.s=ns
-			this.cs=this.s --collision size
+			this.cs=1 --collision size, gets scaled by the object's scale
 			this.sc=1 --scale coefficient on top of normal scale
 			--decode object types
 			--bouncers
@@ -635,9 +652,11 @@ objs.add=function(nx,ny,ntype,ns,naction)
 			elseif ntype=="right" then
 				this.tx=6
 				this.ty=1
+				this.cs=lrscl
 			elseif ntype=="left" then
 				this.tx=6
 				this.ty=2
+				this.cs=lrscl
 			elseif ntype=="balloon" then
 				this.tx=5
 				this.ty=0
@@ -646,25 +665,33 @@ objs.add=function(nx,ny,ntype,ns,naction)
 			elseif ntype=="enemy1" then
 				this.tx=4
 				this.ty=0
-				this.action=hover --TODO: this clobbers naction
+				this.baseaction=hover
+			--launch player diagonally
 			elseif ntype=="spike" then
 				this.tx=7
 				this.ty=1
-				this.action=spikeflash
+				this.baseaction=spikeflash
 				this.cs=fairscl
+			--pickups, they also restore a jump
 			elseif ntype=="star" then
 				this.tx=0
 				this.ty=3
-				this.action=star
+				this.baseaction=star
+			--extremely dangerous, launches the player straight down
 			elseif ntype=="down" then
 				this.tx=5
 				this.ty=1
-				this.action=downflash
+				this.baseaction=downflash
 				this.cs=fairscl
+			elseif ntype=="goal" then
+				this.tx=1
+				this.ty=1
+				this.s=ns*2
 			end
 			if naction~=none then
 				this.action=naction
 			end
+			this.cs=this.cs*this.s --collision size
 			return
 		end
 	end
@@ -675,20 +702,24 @@ objs.update=function()
 		local this=objs[ii]
 		--todo: on-screen check
 		if this:visible() then
-			this.action(this)
+			this:baseaction()
+			this:action()
 			this.x=this.x+this.xd
 			this.y=this.y+this.yd
 			this.sc=this.sc-0.03
 			if this.sc<1 then this.sc=1 end
 			--collisions
 			--objects check if the player hit them, since it's just a many->one relation, objects don't interact with each other really
+			--TODO: goal collision going to an end of-level thing
 			if squcol(player.x,player.y,1, this.x,this.y,this.cs) then
-				local dojump=true --most objects replenish jumps, specify if to not bother by setting this to false
+				local dojump=true --most objects replenish jumps, specify when to not bother by setting this to false
+				--objects grow on being hit
 				this.sc=1.5
+				--bounce upwards
 				if this.type=="bounce" then
 					player.yd=-2.5
-				elseif this.type=="right" then --TODO: refactor
-					--knock right, and also knock away based on where you are
+				--knock right, and also knock away based on where you are
+				elseif this.type=="right" then
 					player.xd=2
 					if player.y>this.y then
 						player.yd=2
@@ -696,6 +727,7 @@ objs.update=function()
 						player.yd=-1
 					end
 					dojump=false
+				--same but left
 				elseif this.type=="left" then
 					player.xd=-2
 					if player.y>this.y then
@@ -704,27 +736,27 @@ objs.update=function()
 						player.yd=-1
 					end
 					dojump=false
+				--pop and bounce player
 				elseif this.type=="balloon" then
-					--pop and bounce player
 					this.on=false
 					player.yd=-2.5
 					for nn=1,12 do
 						jumpburst(this.x,this.y,3)
 					end
+				--disappears and restores your jump, try and collect all in a level
 				elseif this.type=="star" then
-					--semi-rare pickups, try and collect them all!
 					this.on=false
 					player.stars=player.stars+1
 					explode(this.x,this.y, 1, 6, colors.star)
+				--explode on hit, period
 				elseif this.type=="enemy1" then
-					--explode on hit, period
 					--TODO: refactor to function
 					explode(this.x,this.y,2,15)
-					if player.yd>-0.1 then -- smashed it!
+					if player.yd>-0.1 then -- falling down, so you've smashed it!
 						this.on=false
 						camera.shake(4,30)
 						player.yd=-3
-					else --oops
+					else --get knocked back
 						this.sc=3					
 						camera.shake(6,40)
 						player.ctrl_lock=40
@@ -733,8 +765,8 @@ objs.update=function()
 							player.yd=player.yd-0.2
 						end
 					end
+				--get spiked diagonally towards the ground
 				elseif this.type=="spike" then
-					--get spiked horribly towards the ground
 					dojump=false
 					player.ctrl_lock=20
 					player.xd=-2
@@ -744,8 +776,8 @@ objs.update=function()
 					this.sc=3					
 					camera.shake(6,40)
 					if player.yd<1 then player.yd=1 end
+				--get slammed to the ground, stunning you for a good bit, almost certainly knocking you out of bounds
 				elseif this.type=="down" then
-					--get slammed to the ground, stunning you for a good bit, almost certainly knocking you out of bounds
 					dojump=false
 					player.ctrl_lock=50
 					player.xd=0
@@ -755,6 +787,11 @@ objs.update=function()
 					end
 					this.sc=4		
 					camera.shake(8,50)
+				--end of stage
+				--TODO: goal screen
+				elseif this.type=="goal" then
+					gs.titlecard.set(levels[gs.ingame.level].next_stage)
+					return
 				end
 				--replenish jump
 				if dojump then
@@ -825,18 +862,21 @@ gs.death={}
 gs.paused={}
 gs.blank={}
 gs.titlecard={}
+gs.stage_select={}
 gs.current=gs.title
-gs.ingame.level="extra"
+
 --change the game state (initializing everything)
 gs.set=function(n)
 	gs.current=n
 	gs.current.init()
 end
---change the game state (but don't reinitialize, for things like pausing)
+
+--change the game state (but don't reinitialize, for things like pausing, death, or end of stage)
 gs.swap=function(n)
 	gs.current=n
 end
---change the game state, with a few frames of blank screen in between
+
+--change the game state, with a few frames of blank screen in between (default 20f)
 gs.setblank=function(n,tt)
 	if not tt then tt=20 end
 	gs.current=gs.blank
@@ -844,6 +884,7 @@ gs.setblank=function(n,tt)
 	gs.blank.timer=tt
 end
 
+--blank screen state transition
 gs.blank.step=function()
 	local this=gs.blank
 	if this.timer<0 then
@@ -864,6 +905,7 @@ gs.death.init=function()
 	end
 	this.timer=this.timermax
 end
+
 --show the player's death, and either a: go back to the title if out of lives or b: start the stage over
 gs.death.step=function()
 	if player.lives <=0 then
@@ -940,23 +982,121 @@ par.update=function()
 	end
 end
 
+gs.stage_select.init=function()
+	local this=gs.stage_select
+	this.selected=1
+	this.up_light=0
+	this.down_light=0
+	this.error_light=0
+	this.light_max=5
+	par.init()
+end
 
+--secret stage select
+--for debug purposes, we show this always right now
+gs.stage_select.step=function()
+	par.add(
+		math.random(0,view_width),
+		math.random(view_height-8,view_height+8),
+		math.random()*2-1,
+		math.random()*-4,
+		0.25
+	)
+	par.update()
+	par.draw()
+	local this=gs.stage_select
+	local anim="  <"
+	local anim_speed=60
+	if t%anim_speed>=20 then
+		anim=" < "
+	end
+	if t%anim_speed>=40 then
+		anim="<  "
+	end
+	--show messages
+	text("Welcome to the stage select!  ",0,0,1,0)
+	text("Up/Down : choose ID\nA-button: begin level.\nB-button: return to title",0,104,1,3)
+	text("current ID: "..this.selected..anim,0,16,1,3)
+	--TODO: change this when whe're out of alpha
+	text("pop.drop'n alpha version",0,view_height-8,1,3)
+	--show the level info if it exists
+	if levels[this.selected] and levels[this.selected].text then	
+		text(levels[this.selected].text,0,24,1,1)
+		this.error_light=0
+	else
+		local cf=1
+		if this.error_light>0 then
+			this.error_light=this.error_light-1
+			cf=0
+		end
+		text("[cannot select]",0,24,1,cf)
+	end
+	--navigate levels
+	if key(key_up)==1 then
+		this.selected=this.selected-1
+		if this.selected==0 then
+			this.selected=this.selected-1
+		end
+		this.up_light=this.light_max
+	end
+	if key(key_down)==1 then
+		this.selected=this.selected+1
+		if this.selected==0 then
+			this.selected=this.selected+1
+		end
+		this.down_light=this.light_max
+	end
+	--select a level if it exists
+	if key(key_a)==1 then
+		if levels[this.selected] then
+			gs.titlecard.set(this.selected)
+		else
+			this.error_light=this.light_max
+		end
+	end
+	--return to title
+	if key(key_b)==1 then
+		gs.setblank(gs.title,5)
+	end
+	--make navigation text light up when pressing the buttons
+	if this.up_light>0 then
+		text("Up",0,104,1,0)
+		this.up_light=this.up_light-1
+	end
+	if this.down_light>0 then
+		text("Down",24,104,1,0)
+		this.down_light=this.down_light-1
+	end
+end
+
+--no-op
 gs.titlecard.init=function()
-
 end
 --use this to start a title card
---TODO: a lot of this could be handled fairly differently, like getting the text from the level itself, which would require a bit of a (needed) rework of the level framework
-gs.titlecard.set=function(txt, level)
-	this=gs.titlecard
-	this.text=levels[gs.ingame.level].text
+--don't call gs.titlecard.init since we can't pass data to it
+gs.titlecard.set=function(level)
+	local this=gs.titlecard
+	--TODO: 0 is the end of the game marker, we should probably jump to the ending/credits evenutally
+	if level==0 then
+		bg.normal()
+		gs.setblank(gs.title)
+		return
+	end
+	--set the next level, start the title card
+	gs.ingame.level=level
+	this.text=levels[level].text
 	this.timer=60*2
 	gs.setblank(this,10)
 end
 
+--update the title card
 gs.titlecard.step=function()
+	this=gs.titlecard
+	--scrolling text, logo, stage
 	text("get ready! get ready! get ready! get ready! ", (t%(16*11))-16*11,view_height-16,2,0)
 	spr(view_width*3/4,view_height/2,3,0,0)
 	text(this.text,view_width/5,view_height/2-8,1,3)
+	--go to the level once time is up
 	this.timer=this.timer-1
 	if this.timer<0 then
 		gs.setblank(gs.ingame,10)
@@ -982,6 +1122,7 @@ par.add=function(nx,ny,speedx,speedy,scale,life,color)
 	if not color then
 		color={}
 		--[[
+		--TODO: I'm expecting multiple background colors during stages, so we should look at what the current one is and pick what particles
 		color.r=math.random(128,255)
 		color.g=math.random(64,192)
 		color.b=math.random(48,128)
@@ -1008,7 +1149,6 @@ par.add=function(nx,ny,speedx,speedy,scale,life,color)
 	end
 end
 
-
 --explicity reset background settings since paused doesn't have a .init()
 gs.paused.reset=function()
 	gs.paused.option=0 --0: continue, 1: quit
@@ -1016,11 +1156,12 @@ gs.paused.reset=function()
 	gs.paused.no_scl=2
 	gs.paused.confirm=false
 end
+
+--display the pause screen
 gs.paused.step=function()
 	local pp=gs.paused
-	--dim background
-	--TODO: should actually change the background properly
-	--keep drawing everything
+	--dim background, draw everything
+	--TODO: should actually change the background properly, we draw it twice
 	if not pp.confirm then
 		clouds.draw()
 		objs.draw()
@@ -1031,6 +1172,7 @@ gs.paused.step=function()
 		bg.quit()
 	end
 	--paused logo
+	--TODO: what were these names anyway, I wrote this 2 years ago
 	local lscl=2
 	local lpx=lscl*16
 	spr((lpx/2)+4,view_height-(lpx/2)-2,lscl,0,2) --left side
@@ -1041,10 +1183,11 @@ gs.paused.step=function()
 	else
 		outlinetext("end game?",view_width/2-9*4,view_height/2-4,1)
 	end
-	local sc_spd=0.3
-	local no_s, yes_s = 0,0
-	local tsin=math.sin(t/15)/2
+	local sc_spd=0.3 --scale speed
+	local no_s, yes_s = 0,0 --scale value for no/yes icons
+	local tsin=math.sin(t/15)/2 --sin up/down
 	--shrink/grow based on selection
+	--TODO: this is a bit of a mess
 	if pp.option==0 then
 		yes_s=tsin
 		pp.no_scl=pp.no_scl+sc_spd
@@ -1061,28 +1204,36 @@ gs.paused.step=function()
 		pp.yes_scl=pp.yes_scl-sc_spd
 		if pp.yes_scl<0 then pp.yes_scl=0 end
 	end
+	--draw the sprites
 	spr(view_width/2,view_height/2-45, 1 + pp.yes_scl+no_s, 3,2)
 	spr(view_width/2,view_height/2+45, 1 + pp.no_scl+yes_s,4,2)
-	--inputs
+	--select yes/no by input
 	if key(key_down)==1 then pp.option=0 end
 	if key(key_up)==1 then pp.option=1 end
-	--selection menu
+	--activate each option
 	if key(key_start)==1 or key(key_a)==1 then
+		--if we're confirming to exit
 		if pp.confirm then
+			--we decided to back out
 			if pp.option==0 then
 				pp.confirm=false
+			--we're exiting the game
 			elseif pp.option==1 then
 				bg.normal()
-				gs.set(gs.title)
+				gs.setblank(gs.title,5)
 			end
+		--we're on the exit y/n display
 		else
+			--back out, return to game
 			if pp.option==0 then
 				bg.normal()
 				gs.swap(gs.ingame)
+			--confirm exit
 			elseif pp.option==1 then
 				pp.confirm=true
 			end
 		end
+		--every time an option is selected, set it back to cancel
 		pp.option=0
 	end
 	--game logo
@@ -1093,11 +1244,11 @@ gs.paused.step=function()
 	end
 end
 
+--set up each level
 gs.ingame.init=function()
-	this=gs.ingame
+	local this=gs.ingame
 	camera.init()
 	objs.init()
-	--TODO: level select or password option or something
 	levels[this.level].create()
 	clouds.init()
 	player.init()
@@ -1117,7 +1268,7 @@ function outlinetext(str,x,y,s)
 end
 
 --draw hud
---TODO: time, score
+--TODO: time, score? it's quite clean right now, but both are going to be tracked
 function drawhud()
 	--star count
 	spr(8,8,1,0,3)
@@ -1130,7 +1281,6 @@ function drawhud()
 	outlinetext(lifestr,17,view_height-8-3,1)
 	
 end
-
 
 
 --main game
@@ -1193,7 +1343,7 @@ gs.title.step=function()
 		gs.title.logoscl=0
 	end
 	--credits
-	text("2020 B.M.Deeal",112-camera.x, view_height/2-4-camera.y,1,1)
+	text("2022 B.M.Deeal",112-camera.x, view_height/2-4-camera.y,1,1)
 	--start game text
 	if t%60 < 50 then
 		text("press start!!",112-camera.x, view_height/2-4+10-camera.y,1,3)
@@ -1201,7 +1351,8 @@ gs.title.step=function()
 	--TODO: main menu
 	if key(key_start)==1 then
 		--gs.set(gs.ingame)
-		gs.titlecard.set("stage 1\nround 1",1)
+		gs.setblank(gs.stage_select,10)
+		--gs.titlecard.set(1)
 	end
 	--we're in alpha baby
 	text("[alpha version!]",0,0,1,3)
