@@ -95,10 +95,14 @@ where myname is the name of the game, and mygame.quig and mygame.png are togethe
 If mygame.quig has no errors and mygame.png can be loaded, the game will start.
 
 The following command line arguments are supported:
+	--help, -?: get a list of supported arguments.
 	--soft: full software drawing. This is the slowest option, but will run acceptably on the majority of systems, including my Raspberry Pi 2. The window maxes out at 3x internal resolution when using this mode.
-	--hard: hardware window drawing. Use this option if your monitor doesn't run at 60hz and you want a larger screen size. As of this writing, this is the default option.
+	--hard: hardware window drawing (default). Use this option if your monitor doesn't run at 60hz and you want a larger screen size.
 	--hard-vsync: hardware window drawing, timed to vertical sync. Generally the best option. Take note that quig is designed to run at 60fps, so using this on a display that runs faster or slower will cause games to run at entirely the wrong speed (such as on a 144hz display, running games more than twice as fast as intended).
 	--fullscreen: runs the game in windowed fullscreen mode.
+	--window: run the game in a window (default).
+	--auto-scale: automatically set the window size (default).
+	--scale n: set the window size to a given scale factor. For example, --scale 1 will run quig in a tiny 240x144 window. --scale 4 will run quig in a 960x576 window. Currently, only integer values are handled.
 	
 For example,
 	$ quig examples/astro-burst.quig --hard-vsync --fullscreen
@@ -144,7 +148,7 @@ In addition, all quig games MUST have an associated .png holding the game graphi
 Included with quig are various example files that range from simple tutorials on how to get some graphics on screen and take user input to whole games with high speed scaling "3D" graphics and a complex object management system.
 
 An empty.quig and empty.png file are in the examples folder, demonstrating the minimum requirements to create a quig program.
-empty.quig just has the two required functions, and empty.png is entirely filled with the transparent color (#FF00FF, 255,0,255).
+empty.quig just has the two required functions, and empty.png is entirely filled with the transparent color (#FF00FF, rgb(255,0,255)).
 
 quig-ui can create a new, empty game for you: with no file loaded, click 'Create new game', choose a location to save to, and then click 'Create new quig game'.
 
@@ -227,12 +231,18 @@ reserved commands/names:
 These commands don't exist yet, but may be used at some point, so make sure your own functions aren't named the same!
 Don't use these in this version of quig!
 
+* spr_xys()
+	sprite drawing with independent x/y scaling
+* squ_xys()
+	"square" drawing with independent x/y scaling
+* squcol_xys()
+	"square-square" collision with independent x/y scaling
 * rectcol()
 	rectangle-rectangle collision
 * scrolltext()
 	scrolling text
 * audio()
-	generate audio with an internal synthesizer
+	generate audio?
 * keymulti()
 	get input from more than the first controller (up to 4)
 * half_width
@@ -280,9 +290,10 @@ quig-ui is built using VS2019. After downloading the quig-ui sources, simply ope
 ===
 Future release to-do list:
 
+* quickstart.txt, a nicer set of HTML pages for documentation -- this file is getting big and it explains everything, but it is absolutely just a truly gigantic wall of text
 * hiragana text support (the font is loaded, but there isn't a good way to access it, maybe add control characters? I might make the control character ~, so avoid using it)
 * maybe add paletted versions of various commands? sprites still have no palette restriction, but you should be able to define a palette and not constantly have to do things like palette[2].r,palette[2].g,palette[2].b or directly inputting color codes over and over
-* quig-ui needs Linux support/testing
+* quig-ui needs Linux support/testing (with minor modifications, it compiles and runs under Mono, we just need to do them in a nice, toggleable way)
 * add option to force-run a game without a graphics file (likely with the position of the intended sprite overlaid?)
 * add a combined .quigpak format that puts the graphics and the game in the same file and provide a utility for packing/unpacking games
 

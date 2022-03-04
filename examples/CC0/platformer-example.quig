@@ -20,7 +20,7 @@
 	* jump forgiveness -- if you're not on a platform, add a few frames where you can jump in mid air, like a cartoon character that hasn't realized that it's falling
 	* semi-solid platforms -- if you're moving downwards from above, they're solid, but otherwise, the player can ignore them
 	* moving platforms -- update the player's position as they move
-	* scrolling camera -- think of the camera in Sonic CD, how it smoothly shifts to view more of the level when you've been moving for a while, and re-centers when you slow back down
+	* view-shifting camera -- think of the camera in the original release of Sonic CD, how it smoothly shifts to view more of the level when you've been moving for a while, and re-centers when you slow back down/stop moving
 	* zooming camera -- alternatively, zoom the camera in/out dynamically? this one may have issues with tile positioning gaps, but it's worth a try, and you could draw tiles slightly larger than normal to counteract that
 --]]
 

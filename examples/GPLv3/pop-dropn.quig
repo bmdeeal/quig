@@ -30,25 +30,28 @@
 	There are several types of objects and hazards:
 	* up bouncer: these launch you upward. Nothing more, nothing less. After hitting one of these (or most blue objects!), you'll regain your air-jump.
 	* side bouncer: these knock you in the direction they point. As yellow objects, they don't give out a jump, so be careful!
-	* balloon: these also bounce you, but they disappear after being hit!
+	* balloon: these also bounce you, but they disappear after being hit! Blue balloons give you back a jump, while orange balloons do not.
 	* star: collect all the stars in the stage and maybe you'll get something cool? As a bonus, you regain your air-jump every time you collect them.
 	* enemy: these dream monsters want to knock you away! If you hit them while falling down, you'll bounce upwards and defeat them... but if you touch them while rising up, they'll expand like a puffer-fish, and you'll be sent flying backwards!
+	* spike: these send you flying downwards to the left! Very dangerous.
+	* down bouncer: these slam you with extreme speed straight down and stun you from moving for quite a while! Extremely dangerous, but if you're both skilled enough and lucky enough, sometimes you can escape falling out of the level...
 	
-	After hitting most objects, and even when being hit by an enemy, you will regain an air-jump, marked by a trail of sparkling particles. If Drop'n cannot jump, no sparks will trail from her.
+	After hitting many kinds of objects, and even when being hit by an enemy, you will regain an air-jump, marked by a trail of sparkling particles. If Drop'n cannot jump, no sparks will trail from her.
 
-	You have three lives, which are replenished at the start of every level. If you fall out of the level, you'll be returned to the last checkpoint that you've touched.
+	You have three lives at the start of the game, but you can gain more by collecting enough points and stars.
 	If you run out of lives, you'll have to start the game over!
 
 	TODO:
 	* more levels (8 stages, 3 rounds each)
-	* more objects
+	* more objects (bombs that KO Drop'n on the spot?)
 	* more object actions (moving left/right, following the player, teleporting in/out)
-	* goal
 	* scoring (handle this at the end of level -- basically, just do some kind of time+perfect bonus+bonus based on how few times you got hit, should also track whether you got all the stars, popped all the balloons, and hit all the enemies)
 	* attract mode? heck, it could even explain the story and controls and the lot
-	* how to play screen (like on Neo Geo games, but hopefully a bit more useful; really needs to explain how you only attack when you're falling)
+	* how to play screen (like on Neo Geo games, but hopefully a bit more useful; really needs to explain how you only attack when you're falling and what items replenish your jump)
 	* find all the other TODO items and clean them up
 --]]
+
+debugcol_on=false --major photosensitivity warning: shows hitboxes, flashes a LOT, you generally don't want this on
 
 --general table of colors
 --TODO: any sort of color constants/generators should be part of this
@@ -71,22 +74,24 @@ camera={}
 camera.init=function()
 	camera.s=0 --how much to shake
 	camera.st=0 --how long are we shaking for
-	camera.x=0 --this gets updated with the player
-	camera.y=0 --this is just for screen shaking
-	camera.bound=view_width/3 --stages are almost strictly left-to-right, so we show more of what's ahead than what's behind
+	camera.ix=0 --internal x value
+	camera.x=0 --final x value with screen shaking
+	camera.y=0 --final y value with screen shaking (the camera also doesn't move vertically beyond that)
+	camera.bound=view_width/3 --stages are almost strictly left-to-right, so we show more of what's ahead than what's behind, adjust this to scroll the camera around horizontally
 end
 
 --track the player
 camera.updateplayer=function()
+	camera.ix=player.x-camera.bound
 	camera.update()
-	camera.x=camera.x+player.x-camera.bound
+	--camera.x=camera.ix--camera.x+player.x-camera.bound
 end
 
 --update the camera, call this if you need camera features but there's no player
 camera.update=function()
 	camera.s=camera.s-camera.st
 	if camera.s<0 then camera.s=0 end
-	camera.x=floatrand(-camera.s,camera.s)
+	camera.x=camera.ix+floatrand(-camera.s,camera.s)
 	camera.y=floatrand(-camera.s,camera.s)
 end
 
@@ -207,7 +212,17 @@ levels[-1].next_stage=0
 levels[-1].create=function()
 	levels.intro()
 	---[[
-	levels.add(72, 80, "bounce", 1, hover)
+	levels.add(60, 100, "balloon2")
+	levels.add(50, 90, "balloon2")
+	levels.add(30, 40, "left", 1, hover)
+	levels.add(4, 90, "bounce", 1, hoververymild)
+	levels.add(40, 80, "balloon2")
+	levels.add(60, 75, "balloon")
+	levels.add(60, 70, "balloon2")
+	levels.add(60, 80, "balloon2")
+	levels.add(110, 100, "balloon2")
+	levels.add(40, 100, "balloon2")
+	levels.add(60, 80, "bounce", 1, hover)
 	levels.add(0, 100, "star")
 	levels.add(60, 40, "down", 2)
 	levels.add(0,120,"balloon")
@@ -215,8 +230,11 @@ levels[-1].create=function()
 	levels.add(36, 80, "bounce", 1, hover)
 	levels.add(50, 100, "star", 1, hovermild)
 	levels.add(50, 90, "star", 1, hovermild)
-	levels.add(60, 100, "balloon", 2)
+	levels.add(60, 100, "balloon2")
 	levels.add(70, 80, "star", 1, hovermild)
+	levels.add(20, 20, "left", 2, hovermild)
+	levels.add(0, 120, "right", 2, hover)
+	levels.add(25, 120, "balloon", 1, hover)
 	levels.add(50, 60, "star", 1, hovermild)
 	levels.add(40, 100, "spike", 1, hovermild)
 	levels.add(60,120, "bounce", 2)
@@ -228,13 +246,15 @@ levels[-1].create=function()
 	levels.add(60,40, "enemy1")
 	levels.add(80,120, "bounce")
 	levels.add(0,30, "spike",2)
-	levels.add(100,32, "bounce")
+	levels.add(100,50, "bounce", 1, hover)
+	levels.add(0,10, "left", 1, hovermild)
 	levels.add(0,120, "spike",2)
 	levels.add(100,120, "bounce")
 	levels.add(0,30, "spike",2)
 	levels.add(60,30, "spike")
 	levels.add(40,30, "left")
 	levels.add(0,120, "spike",2)
+	
 	levels.add(50,90, "bounce")
 	levels.add(30,100, "right")
 	levels.add(30,110, "right")
@@ -242,49 +262,64 @@ levels[-1].create=function()
 	levels.add(40,120,"bounce",2, hovermild)
 	levels.add(50,60,"enemy1")
 	levels.add(50,30,"enemy1")
+	levels.add(10,50,"left", 1,hover)
 	levels.add(50,60,"enemy1")
+	levels.add(20,70,"left", 1,hover)
+	levels.add(20,20,"left", 1,hovermild)
 	levels.add(50,30,"enemy1")
+	levels.add(10,60,"left", 2,hover)
+	levels.add(20,20,"left", 1,hovermild)
 	--]]
 	levels.add(60,80, "bounce",1, hover)
 	levels.add(40,60,"left",3)
 	levels.add(0,100,"left",3)
 	levels.add(0,140,"left",3)
 	levels.add(60,130, "bounce",1, hover)
+	levels.add(0,50,"left", 1,hovermild)
 	levels.add(60,60,"down",3)
 	levels.add(0,20,"left",3)
-	levels.add(60,80, "bounce",1, hover)
+	levels.add(50,80, "bounce",1, hover)
 	levels.add(0,120, "bounce",1, hovermild)
-	levels.add(40,60,"left",3)
+	levels.add(20,16,"spike",1,hovermild)
+	levels.add(30,5,"spike",1,hovermild)
+	levels.add(35,60,"left",3)
+	levels.add(0,20,"star")
 	levels.add(0,100,"left",3)
 	levels.add(0,140,"down",3)
 	levels.add(60,120, "bounce",1, hover)
+	levels.add(30,40, "down",2, hovermild)
 	levels.add(60,60,"left",3)
 	levels.add(0,20,"left",3)
 	levels.add(30,130,"bounce")
 	levels.add(30,120,"bounce")
-	levels.add(30,50,"enemy1")
+	levels.add(30,80,"enemy1")
 	levels.add(30,120,"bounce")
+	levels.add(30,70,"enemy1")
+	levels.add(15,40,"spike",1,hovermild)
 	levels.add(30,50,"enemy1")
-	levels.add(30,50,"enemy1")
-	levels.add(45,20,"spike",2)
+	levels.add(45,60,"spike",3,hover)
+	levels.add(45,120,"spike",2,hover)
 	--TODO: more
 	levels.ending()
 end
 
 
+--first level so far, but if I do use this, I'll probably move it later in the game and do the actual first level near the very end
 levels[1].text="stage 1\nround 1"
 levels[1].next_stage=-1
---TODO: rework a bit (that wavy bit, despite being fairly easy, is probably a bit overwhelming for so early in the level and so early in the game
 levels[1].create=function()
 	--intro segment
 	levels.intro()
 	--main level
-	
+	---[[
 	levels.add(75,120,"bounce",2,hovermild)
 	levels.add(35,120,"bounce",2,hovermild)
 	levels.add(35,120,"bounce",2,hovermild)
-	
-	levels.add(48,30,"enemy1")
+	levels.add(0,80,"star",1,hover)
+	levels.add(35,120,"bounce",2,hovermild)
+	levels.add(35,120,"bounce",2,hovermild)
+	levels.add(48,60,"enemy1")
+	levels.add(10,20,"enemy1")
 	levels.add(48,80,"bounce",2)
 	levels.add(64,120,"bounce",2,hover)
 	levels.add(48,70,"spike")
@@ -316,7 +351,7 @@ levels[1].create=function()
 	levels.add(70,120,"bounce",1,hover)
 	levels.add(35,120,"balloon")
 	levels.add(35,120,"bounce",2,hover)
-	
+
 	levels.add(35,120,"balloon")
 	levels.add(35,120,"bounce",1,hover)
 	levels.add(0,50,"enemy1",1,hover)
@@ -331,8 +366,7 @@ levels[1].create=function()
 	levels.add(40,48,"bounce",1,hovermild)
 	levels.add(20,90,"spike",2)
 	levels.add(60,120,"balloon",2)
-
-	--TODO: checkpoints (?), goal
+	--]]
 	levels.ending()
 	--levels.stress()
 end
@@ -504,8 +538,14 @@ player.draw=function()
 	local anim=0
 	if player.anim>=player.animrate/2 then anim=1 end
 	--draw player
-	if not (player.ctrl_lock > 0 and t%5 ~= 2) then --flash during control lock
-		spr(player.x-camera.x,player.y-camera.y,1,3-anim,0)
+	--flash during control lock
+	if not (player.ctrl_lock > 0 and t%5 ~= 2) then 
+		--more visible jump indicator? dunno
+		if player.jump and flip>0 then
+			local col=colors.jump()
+			--squ(player.x-camera.x+math.random(-4,4), player.y-camera.y+math.random(-4,4), 0.25, col.r, col.g, col.b)
+		end
+		spr(player.x-camera.x, player.y-camera.y,1,3-anim,0)
 	end
 end
 
@@ -515,7 +555,7 @@ objs.max=255 --arbitrary limit, could be done away with
 
 --is the object on screen?
 --objects that do anything other than just sit there might move onto the screen, so we treat them as always being on screen anyway
---TODO: should we give moving objects a different version of this?
+--TODO: should we give horizontally moving objects a different version of this? might just give those a function that just returns true
 objs.checkonscreen=function(this)
 	local scale=this.s*this.sc*16
 	if this.on and (this.showalways or (this.x+scale >= camera.x and this.x-scale <= camera.x+view_width)) then
@@ -550,16 +590,18 @@ objs.init=function()
 	end
 end
 --draw each object
---todo: only draw what's on screen
 objs.draw=function()
 	for ii=1,objs.max do
 		local this=objs[ii]
-		local scale=this.s*this.sc*16
 		if this:visible() then
-			spr(objs[ii].x-camera.x, objs[ii].y-camera.y, this.s*this.sc, objs[ii].tx, objs[ii].ty)
+			--local scale=this.s*this.sc*16
 			--debug view (warning, flashes miserably)
-			if debugcol_on and t%20>10 then
-				squ(objs[ii].x-camera.x, objs[ii].y-camera.y, this.cs, 0,255,0)
+			if debugcol_on then
+				squ(objs[ii].x-camera.x, objs[ii].y-camera.y, this.cs, 128,128,128)
+			end
+			spr(objs[ii].x-camera.x, objs[ii].y-camera.y, this.s*this.sc, objs[ii].tx, objs[ii].ty)
+			if debugcol_on and t%3>0 then
+				squ(objs[ii].x-camera.x, objs[ii].y-camera.y, this.cs, 128,128,128)
 			end
 		end
 	end
@@ -575,7 +617,6 @@ spikecolor={
 }
 
 --update event for spikes
---again, we probably should put this on a global animation timer but eh
 function spikeflash(this)
 	if t%6>=3 then
 		this.ty=0
@@ -585,6 +626,7 @@ function spikeflash(this)
 	end
 end
 
+--update event for down bouncers
 function downflash(this)
 	if t%6>=3 then
 		this.ty=1
@@ -600,10 +642,14 @@ function hover(this)
 	this.y=this.hovery+math.sin((this.x+t)/30)*12
 end
 --have objects only float a little
---TODO: could probably make this a per-object setting? maybe?
 function hovermild(this)
 	if not this.hovery then this.hovery=this.y end
 	this.y=this.hovery+math.sin((this.x+t)/50)*6
+end
+--have objects only float very very little -- probably should think about configuring actions to have optional parameters, would require a little bit of reworking things
+function hoververymild(this)
+	if not this.hovery then this.hovery=this.y end
+	this.y=this.hovery+math.sin((this.x+t)/60)*4
 end
 
 --handle star glittering/animation
@@ -640,15 +686,18 @@ objs.add=function(nx,ny,ntype,ns,naction)
 			this.y=ny
 			this.type=ntype
 			this.action=none
-			this.baseaction=none
+			this.baseaction=none --objects get an action that they always do
 			this.s=ns
 			this.cs=1 --collision size, gets scaled by the object's scale
 			this.sc=1 --scale coefficient on top of normal scale
 			--decode object types
-			--bouncers
+			--normal bouncers
+			--restores jump
 			if ntype=="bounce" then
 				this.tx=6
 				this.ty=0
+			--side bouncers
+			--they don't restore jump
 			elseif ntype=="right" then
 				this.tx=6
 				this.ty=1
@@ -657,10 +706,17 @@ objs.add=function(nx,ny,ntype,ns,naction)
 				this.tx=6
 				this.ty=2
 				this.cs=lrscl
+			--balloons (pop when hit)
+			--restores jump
 			elseif ntype=="balloon" then
 				this.tx=5
 				this.ty=0
 				this.action=hovermild
+			--does not restore jump
+			elseif ntype=="balloon2" then
+				this.tx=7
+				this.ty=2
+				this.action=hoververymild
 			--simple enemy
 			elseif ntype=="enemy1" then
 				this.tx=4
@@ -683,15 +739,18 @@ objs.add=function(nx,ny,ntype,ns,naction)
 				this.ty=1
 				this.baseaction=downflash
 				this.cs=fairscl
+			--end the level
 			elseif ntype=="goal" then
 				this.tx=1
 				this.ty=1
 				this.s=ns*2
 			end
+			--set the action function if specified
 			if naction~=none then
 				this.action=naction
 			end
-			this.cs=this.cs*this.s --collision size
+			--collision size
+			this.cs=this.cs*this.s 
 			return
 		end
 	end
@@ -700,17 +759,21 @@ end
 objs.update=function()
 	for ii=1,objs.max do
 		local this=objs[ii]
-		--todo: on-screen check
+		--update each object based on its visibility function
 		if this:visible() then
+			--update object actions
 			this:baseaction()
 			this:action()
+			--variable movement (are we actually going to use this
 			this.x=this.x+this.xd
 			this.y=this.y+this.yd
+			--always shrink scale after being set
 			this.sc=this.sc-0.03
 			if this.sc<1 then this.sc=1 end
 			--collisions
 			--objects check if the player hit them, since it's just a many->one relation, objects don't interact with each other really
 			--TODO: goal collision going to an end of-level thing
+			--TODO: this probably should be calling an onhit parameter as a function instead of checking through a list of types
 			if squcol(player.x,player.y,1, this.x,this.y,this.cs) then
 				local dojump=true --most objects replenish jumps, specify when to not bother by setting this to false
 				--objects grow on being hit
@@ -743,6 +806,14 @@ objs.update=function()
 					for nn=1,12 do
 						jumpburst(this.x,this.y,3)
 					end
+				--orange balloons don't bounce you as high and don't give you a jump back
+				elseif this.type=="balloon2" then
+					this.on=false
+					player.yd=-2
+					for nn=1,5 do
+						jumpburst(this.x,this.y,2)
+					end
+					dojump=false
 				--disappears and restores your jump, try and collect all in a level
 				elseif this.type=="star" then
 					this.on=false
@@ -790,20 +861,21 @@ objs.update=function()
 				--end of stage
 				--TODO: goal screen
 				elseif this.type=="goal" then
-					gs.titlecard.set(levels[gs.ingame.level].next_stage)
+					explode(this.x,this.y,2,20,{r=115,g=239,b=247}) --asdfasdf
+					gs.set(gs.cleared)
 					return
 				end
 				--replenish jump
 				if dojump then
 					player.jump=true
 				end
-			end --collision check
-		end --visible y/n check
-	end --object loop
+			end --end of collision check
+		end --end of visibility check
+	end --end of object loop
 end
 
 --background system
---it lets you do quick'n'dirty gradients
+--it lets you do quick'n'dirty gradients with RGB deltas
 bg={}
 bg.normal=function()
 	bg.r=10
@@ -829,49 +901,84 @@ bg.pause=function()
 	bg.gd=-2
 	bg.bd=-2
 end
+--[[
+bg.cleared=function()
+	bg.r=10
+	bg.g=12
+	bg.b=30
+	bg.rd=1.6 
+	bg.gd=1.6 
+	bg.bd=2.5
+end
+--]]
+
+--reset the background
+--should probably call this more and not just use bg.normal() everywhere
 bg.init=function()
 	bg.normal()
 	bg.count=36
+	bg.reverse=false
+	bg.brighten=1
 end
 --draw a gradient out of rectangles
 bg.draw=function()
-	local rr,gg,bb= bg.r, bg.g, bg.b
-	for ii=0,bg.count-1 do
+	--local rr,gg,bb= bg.r+bg.brighten, bg.g+bg.brighten, bg.b+bg.brighten
+	local rr, gg, bb = bg.r, bg.g, bg.b
+	local rrd, ggd, bbd = bg.rd*bg.brighten, bg.gd*bg.brighten, bg.bd*bg.brighten
+	local top, bottom, step
+	if bg.reverse then 
+		top=bg.count-1
+		bottom=0
+		step=-1
+	else
+		top=0
+		bottom=bg.count-1
+		step=1
+	end
+	--for ii=0,bg.count-1 do
+	for ii=top, bottom, step do
 		local ysize=view_height/bg.count --height of each strip
 		local ypos=ii*ysize -- where each strip goes
 		--calculate the colors, draw
 		--todo: refactor into a clamp function
-		rr=rr+bg.rd
+		rr=rr+rrd
 		rr=math.max(0,rr)
 		rr=math.min(255,rr)
-		gg=gg+bg.gd
+		gg=gg+ggd
 		gg=math.max(0,gg)
 		gg=math.min(255,gg)
-		bb=bb+bg.bd
+		bb=bb+bbd
 		bb=math.max(0,bb)
 		bb=math.min(255,bb)
 		rect(0,ypos,view_width,ysize+1,rr,gg,bb)
+	end
+	if bg.brighten>1 then
+		bg.brighten=bg.brighten-0.0625
+	else
+		bg.brighten=1
 	end
 end
 
 --game states
 gs={}
+gs.warning={}
 gs.title={}
 gs.ingame={}
 gs.death={}
 gs.paused={}
 gs.blank={}
+gs.cleared={}
 gs.titlecard={}
 gs.stage_select={}
-gs.current=gs.title
+gs.current=gs.warning
 
---change the game state (initializing everything)
+--change the game state, running the initialization function
 gs.set=function(n)
 	gs.current=n
 	gs.current.init()
 end
 
---change the game state (but don't reinitialize, for things like pausing, death, or end of stage)
+--change the game state (but don't reinitialize, like when returning back from pause)
 gs.swap=function(n)
 	gs.current=n
 end
@@ -904,10 +1011,13 @@ gs.death.init=function()
 		this.timermax=this.timermax*3
 	end
 	this.timer=this.timermax
+	camera.shake(5,45)
+	bg.brighten=4
 end
 
 --show the player's death, and either a: go back to the title if out of lives or b: start the stage over
 gs.death.step=function()
+	camera.update()
 	if player.lives <=0 then
 		cls(0,0,0)
 	end
@@ -926,6 +1036,7 @@ gs.death.step=function()
 	clouds.draw()
 	objs.update()
 	objs.draw()
+	--this is a loop since I'd adjusted how much
 	for ii=1,2 do
 		par.add(player.x+floatrand(-12,12),view_height, floatrand(-0.25,0.25),floatrand(-1,-7), math.max(0,(this.timer-30)/this.timermax),30, colors.jump())
 	end
@@ -934,6 +1045,33 @@ gs.death.step=function()
 	if player.lives <=0 then
 		outlinetext("dream over", view_width/2-10*8, view_height/2-8, 2)
 	end
+end
+
+gs.cleared.init=function()
+	--bg.reverse=true
+	this=gs.cleared
+	this.timer=0
+	this.timer_max=60*2
+	camera.shake(5,45)
+	bg.brighten=5
+end
+
+gs.cleared.step=function()
+	player.y=-1000 --keep the player away from anything at all
+	--we still update things
+	camera.update()
+	objs.update()
+	par.update()
+	clouds.draw()
+	objs.draw()
+	par.draw()
+	outlinetext("round clear",(view_width-16*11)/2,view_height/2-8,2)
+	if this.timer>=this.timer_max then
+		gs.titlecard.set(levels[gs.ingame.level].next_stage)
+		bg.reverse=false
+		return
+	end
+	this.timer=this.timer+1
 end
 
 --particle system
@@ -1076,7 +1214,8 @@ end
 --don't call gs.titlecard.init since we can't pass data to it
 gs.titlecard.set=function(level)
 	local this=gs.titlecard
-	--TODO: 0 is the end of the game marker, we should probably jump to the ending/credits evenutally
+	bg.normal()
+	--TODO: 0 is the end of the game marker, we should probably jump to the ending/credits eventually
 	if level==0 then
 		bg.normal()
 		gs.setblank(gs.title)
@@ -1085,7 +1224,7 @@ gs.titlecard.set=function(level)
 	--set the next level, start the title card
 	gs.ingame.level=level
 	this.text=levels[level].text
-	this.timer=60*2
+	this.timer=60*1.25
 	gs.setblank(this,10)
 end
 
@@ -1093,7 +1232,7 @@ end
 gs.titlecard.step=function()
 	this=gs.titlecard
 	--scrolling text, logo, stage
-	text("get ready! get ready! get ready! get ready! ", (t%(16*11))-16*11,view_height-16,2,0)
+	text("get ready! get ready! get ready! get ready! ", ((t*1.25)%(16*11))-16*11,view_height-16,2,0)
 	spr(view_width*3/4,view_height/2,3,0,0)
 	text(this.text,view_width/5,view_height/2-8,1,3)
 	--go to the level once time is up
@@ -1149,17 +1288,23 @@ par.add=function(nx,ny,speedx,speedy,scale,life,color)
 	end
 end
 
---explicity reset background settings since paused doesn't have a .init()
+--explicitly reset pause settings
 gs.paused.reset=function()
-	gs.paused.option=0 --0: continue, 1: quit
-	gs.paused.yes_scl=0
-	gs.paused.no_scl=2
-	gs.paused.confirm=false
+	local this=gs.paused
+	this.option=0 --0: continue, 1: quit
+	this.yes_scl=0
+	this.no_scl=2
+	this.confirm=false
+end
+
+gs.paused.init=function()
+	local this=gs.paused
+	this.t=t --save the t value since it updates
 end
 
 --display the pause screen
 gs.paused.step=function()
-	local pp=gs.paused
+	local pp=gs.paused --TODO: rename to this
 	--dim background, draw everything
 	--TODO: should actually change the background properly, we draw it twice
 	if not pp.confirm then
@@ -1227,6 +1372,7 @@ gs.paused.step=function()
 			--back out, return to game
 			if pp.option==0 then
 				bg.normal()
+				t=pp.t
 				gs.swap(gs.ingame)
 			--confirm exit
 			elseif pp.option==1 then
@@ -1254,6 +1400,7 @@ gs.ingame.init=function()
 	player.init()
 	gs.paused.reset()
 	par.init()
+	this.clock=0
 	t=0
 end
 
@@ -1282,21 +1429,47 @@ function drawhud()
 	
 end
 
+--warning text+copyright info
+--pretty much just copied this from astro-burst
+gs.warning.init=function()
+end
 
---main game
+gs.warning.step=function()
+	cls(50,50,50)
+	spr(view_width-16,view_height-16,2,0,0)
+	text("Welcome to pop.drop'n!",0,0,1,0)
+	text("\n(C) 2022 B.M.Deeal\nLicensed under GPLv3.\n\n---\n\n\n\nThis game features flickering\nlights and flashing imagery.\nPlayer discretion is advised.",0,8,1,3)
+	text("\nPhotosensitivity warning:",0,8*6,1,0)
+	text("press start to play...",0,view_height-8,1,1)
+	if key(key_start)==1 then
+		gs.setblank(gs.title) 
+		showfps=true --TODO
+		return
+	end
+end
+
+
+--main game loop
 gs.ingame.step=function()
+	local this=gs.ingame
+	--update game objects, particles, and background
 	objs.update()
 	player.update()
 	clouds.update()
 	par.update()
+	--this moves the camera around, has to be done before drawing
 	camera.updateplayer()
+	--draw everything
 	clouds.draw()
 	objs.draw()
 	player.draw()
 	par.draw()
 	drawhud()
+	--update the level timer
+	this.clock=this.clock+1
+	--handle pause
 	if key(key_start)==1 then
-		gs.swap(gs.paused)
+		gs.set(gs.paused)
 	end
 end
 
@@ -1309,10 +1482,11 @@ gs.title.init=function()
 	player.lives=3
 	camera.x=0
 end
+
 gs.title.step=function()
 	--normal background
 	bg.normal()
-	--screen shake depends on the camera
+	--screen shake depends on having the camera active
 	camera.update()
 	--add some particles at the top/bottom of screen
 	--TODO: can't be bothered to do the change and test it, but this doesn't need to be an if, right? maybe? it's almost 3am
@@ -1323,14 +1497,14 @@ gs.title.step=function()
 	end
 	par.update()
 	par.draw()
-	--draw player sprite
+	--draw player sprite, animated and affected by the shake
 	local pa=0
 	if t%30>15 then pa=1 end
 	spr(48-camera.x,94-camera.y,1,3-pa,0)
-	--draw logo
+	--draw logo, slamming into the screen from above
 	local logox,logoy=64-camera.x,view_height/2-camera.y
 	spr(logox,logoy,4+gs.title.logoscl,0,0)
-	--the logo zooms out from above the background, slamming into the screen
+	--logo falling
 	if gs.title.logoscl>0 then
 		gs.title.logoscl=gs.title.logoscl-0.1
 		if gs.title.logoscl<=0 then --SLAM!
@@ -1348,16 +1522,18 @@ gs.title.step=function()
 	if t%60 < 50 then
 		text("press start!!",112-camera.x, view_height/2-4+10-camera.y,1,3)
 	end
-	--TODO: main menu
+	--TODO: main menu?
 	if key(key_start)==1 then
 		--gs.set(gs.ingame)
 		gs.setblank(gs.stage_select,10)
 		--gs.titlecard.set(1)
 	end
-	--we're in alpha baby
+	--we're still in alpha baby
 	text("[alpha version!]",0,0,1,3)
 end
 
+--reset everything, but not really
+--don't call this directly, you'll probably want to set the game state to the title screen to reset the game
 function init()
 	t=0
 	par.init()
@@ -1366,11 +1542,15 @@ function init()
 	flip=1
 end
 
+--general purpose update
 function step()
-	cls(0,0,0) --we probably don't need this, and I should make it magic pink so if something does make it visible, it's VERY noticeable 
+	cls(0,0,0) --TODO?: we probably don't need this, and I should make it magic pink so if something does make it visible, it's VERY noticeable
 	bg.draw()
 	gs.current.step()
-	text(string.format("%4f", getfps()), view_width-4*8, view_height-8,1,2+flip)
-	t=t+1 --general purpose timer
-	flip=-flip --things that happen every other frame
+	--TODO: this should be togglable
+	if showfps then
+		text(string.format("%4f", getfps()), view_width-4*8, view_height-8,1,2+flip)
+	end
+	t=t+1 --general purpose timer that always updates every single frame, so be careful
+	flip=-flip --things that happen every other frame (and also updates every single frame, eg, during pausing)
 end

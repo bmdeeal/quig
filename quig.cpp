@@ -13,11 +13,10 @@
 	---
 	
 	other, major TODO:
-	* really should get this building on Windows with something other than MSYS2 so I don't need to distribute a gazillion DLLs
-	  quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
-	  EDIT: we can build with Visual Studio now, although we don't build the dependencies ourselves
-	* everything about audio is in flux and I don't know if we're even 
-	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions
+	* quig doesn't use webp or tiff or opus (actually, we probably should support opus audio), why do I need to include those
+	* we can build with Visual Studio now, although we don't build the dependencies ourselves
+	* everything about audio is in flux -- I really do want live, synthesized audio, I've just never actually done this before
+	* we should support building SDL, SDL_Image, SDL_Mixer, and Lua ourselves instead of only supporting the package manager installed versions with our build script
 	* there's got to be an automated way to do header files in C++ -- cproto works for C, but gets confused with C++ declarations
 	* proper analog stick direction check -- it is way too easy to hit diagonal inputs on accident, we should check based on the angle rather than just an x/y check
 	* the GIF saving needs to show progress or something (maybe? on my current desktop, it's entirely seamless, but I remember it pausing badly on my laptop and the Pi)
@@ -35,6 +34,7 @@
 	* general cleanup, it's a bit messy, loads of init-related stuff should probably be refactored into their own functions
 	
 	possible TODOs:
+	* color blending? might just expose the various blend modes, but I want to do it in a nice way
 	* selectable gif export length? or at least make it so that it can be ended early (eg, pressing select again)
 	* frame blending option during display (we do this during gif export, so it should be reasonable as a runtime option)
 	* better joystick support handling in general (it's all just a right mess and I really should just write a separate library that handles all that garbage and there are certainly going to be generic joysticks that should work but SDL doesn't have Xbox-style mappings for them)
@@ -71,7 +71,7 @@ extern "C" {
 #include "quig.h"
 
 //constants
-const char *QUIG_VERSION="1.1-beta2b"; //version string -- major.minor-status
+const char *QUIG_VERSION="1.2-beta1"; //version string -- major.minor-status
 const int QUIG_DEBUG = 1; //TODO: compile script flag for this
 const int FPS_RATE = 60; //quig runs at a fixed 60fps, period
 const int FPS_TICKS = (1000 / FPS_RATE);
@@ -81,7 +81,7 @@ const int VIEW_HEIGHT=144; //9 tiles, 18 characters
 
 //sound stuff
 const int NUM_CHANNELS = 8;
-const int AUDIO_MAX=31; //00-30
+const int AUDIO_MAX = 1; //31; //00-30 -- we're moving away from this
 bool sound_enabled=false; //has audio been initialized
 int sound_freq=48000;
 int buffer_len=2048;
@@ -155,7 +155,7 @@ void initAudio() {
 	std::cerr << "notice: initializing audio...\n";
 	if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		std::cerr << "error: couldn't initialize SDL audio!\n";
-		return; //we failed
+		return;
 	}
 	int flags=MIX_INIT_MP3;
 	if (!(Mix_Init(flags) & flags)) {
@@ -208,6 +208,7 @@ int window_height=VIEW_HEIGHT;
 
 //set the window size
 //this doesn't do anything after the window has been created
+//TODO: probably should allow non-integer scales
 void setWindowScale(int s) {
 	if (QUIG_DEBUG) {
 		std::cerr << "debug: setting window scale to " << s << "\n";
@@ -217,6 +218,24 @@ void setWindowScale(int s) {
 	window_height=(VIEW_HEIGHT*window_scale);
 }
 
+//show the arguments you can use
+void showHelp() {
+	std::cout
+		<< "\nusage:\n"
+		<< "  quig [arguments] gamefile\n"
+		<< "\narguments:\n"
+		<< "  -?, --help: show this help message here\n"
+		<< "  --soft: use software scaling for display (no vsync)\n"
+		<< "  --hard: use hardware scaling for display (no vsync) (default)\n"
+		<< "  --hard-vsync: use hardware scaling for display (vsync, display must run at 60hz)\n"
+		<< "  --fullscreen: run quig in fullscreen\n"
+		<< "  --window: run quig in a window (default)\n"
+		<< "  --auto-scale: automatically size the quig window (default)\n"
+		<< "  --scale n: scale the quig window by a given amount (eg, --scale 2)\n"
+		;
+}
+
+
 //quig isn't hardware accelerated (at all, even though it probably could/should be)
 //but we do at least stretch the final screen size in hardware if asked to
 //and doing that is required for vsync
@@ -224,14 +243,12 @@ enum class DisplayMode {
 	soft, hard_novsync, hard_vsync
 };
 DisplayMode display_mode=DisplayMode::hard_novsync; //TODO: make this a compile-time option for what is default?
-bool fullscreen=false; //TODO: fullscreen ignores aspect ratio, need to fix that
+bool fullscreen=false; //TODO: fullscreen in software mode ignores aspect ratio, need to fix that
 
-
-//TODO: allow the user to specify the screen scale rather than it being entirely automatic
-//TODO: main should bail if this function returns !=0
 //TODO: add a --help and -? option
 int handleArgs(int argc, char **argv) {
 	int size=-1; //automatically set the screen scale based on screen width and screen height (minus 64)
+	int user_size = -1; //how much the user wants the scale
 	std::string current="";
 	for (int ii=0; ii<argc; ii++) {
 		current=argv[ii];
@@ -243,37 +260,79 @@ int handleArgs(int argc, char **argv) {
 			continue;
 		}
 		//handle arguments
+		//quig allows the same argument to be repeated (eg, if you have a script that has default settings, but allows them to be changed), the most recent argument is the one that is used
+		//nothing stops you from running quig like
+		//  $ quig default.quig --scale 4 --hard-vsync ~/mygame.quig --auto-scale --hard
+		//where it'll end up using automatic scale, no v-sync, and run ~/mygame.quig instead of default.quig
 		if (current[0]=='-') {
+			//software mode, no v-sync
 			if (current=="--soft") {
 				display_mode=DisplayMode::soft;
 			}
+			//hardware mode, no v-sync
 			else if (current=="--hard") {
 				display_mode=DisplayMode::hard_novsync;
 			}
+			//hardware mode, v-sync
 			else if (current=="--hard-vsync") {
 				display_mode=DisplayMode::hard_vsync;
 			}
+			//fullscreen
 			else if (current=="--fullscreen") {
 				fullscreen=true;
 			}
+			//windowed
 			else if (current=="--window") {
 				fullscreen=false;
 			}
-			//TODO: show help on stdout here
+			//automatic scale (a quig window that comfortably fits on screen)
+			else if (current=="--auto-scale") {
+				user_size=-1;
+			}
+			//user-defined scale
+			else if (current=="--scale") {
+				//attempt to get next arg
+				//bail if we run out of arguments
+				if (ii+1 >=argc) {
+					std::cerr << "fatal error: no scale factor given!\n";
+					return 1;
+				}
+				//advance the argument list, grab and convert the next argument
+				ii++;
+				std::string sub_arg=argv[ii];
+				try {
+					user_size=std::stoi(sub_arg);
+				}
+				//std::logic_error is the parent to all of the stoi exceptions
+				catch (std::logic_error) { 
+					std::cerr << "fatal error: could not understand '" << sub_arg << "' as a scale factor!\n";
+					return 1;
+				}
+				//bad size -- dunno if this will get adjusted if quig supports non-integer scale factors
+				if (user_size<1) {
+					std::cerr << "fatal error: invalid size '" << user_size << "'!\n";
+					return 1;
+				}
+			}
+			//show help (also, immediately stops argument handling)
+			else if (current == "-?" || current == "--help") {
+				showHelp();
+				return 2;
+			}
+			//unknown argument
 			else {
-				std::cerr << "fatal error: invalid arguments!" << std::endl;
+				std::cerr << "fatal error: unknown argument '"<< current << "'!" << std::endl;
+				showHelp();
 				return 1;
 			}
 			
 		}
 		//anything that isn't an argument is a game name, and we run the last one specified
-		//NOTE: should we bail if multiple game files are specified? that seems like it might be more reasonable behavior
-		//although, I can easily see some default script that passes a game and that gets overridden, so maybe not
 		else {
 			arg_name=current;
 		}
 	}
-	//limit the display size to 3x in software mode because software scaling gets slow, fast
+	//limit the display size to 3x in software mode because software scaling rapidly gets slow as the size increases
 	int xscale=1,yscale=1;
 	if (size==-1) {
 		SDL_DisplayMode mode;
@@ -289,10 +348,17 @@ int handleArgs(int argc, char **argv) {
 		}
 		//this shouldn't happen, but maybe quig's being run on something weird?
 		else {
-			std::cerr << "error: could not get display information! Window will be unscaled." <<std::endl;
+			std::cerr << "error: could not get display information! Auto-scale will not work." <<std::endl;
 		}
-		setWindowScale(min2(xscale,yscale));
-		//limit the size of software scaling because it's slow and if you're running in software, you probably aren't (or shouldn't be) driving a high-res screen
+		//set auto-scale
+		if (user_size==-1) {
+			setWindowScale(min2(xscale,yscale));
+		}
+		//set user scale
+		else {
+			setWindowScale(user_size);
+		}
+		//limit the size of software scaling because it's very slow and if you're running quig in software scale mode, you probably aren't (or shouldn't be) driving a high-res screen
 		if (display_mode==DisplayMode::soft && window_scale > 3) {
 			setWindowScale(3);
 		}
@@ -347,7 +413,7 @@ int saveRecording() {
 	}
 	//SDL will convert from display format to AGBR format for gif.h
 	//colors were wrong without this
-	//TODO: GIF scale option, it outputs at 1x right now
+	//TODO: GIF scale option, it outputs only at 1x right now
 	SDL_Surface *target_surf=SDL_CreateRGBSurface(0, VIEW_WIDTH, VIEW_HEIGHT, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0);
 	//also, if you can't write to the current directory, this doesn't work
 	int gifdelay=3; //TODO: make configurable
@@ -423,6 +489,7 @@ int min2(int a, int b) {
 SDL_GameController *controller = NULL;
 //massive duplication of work because SDL handles controller input wildly differently than keyboard input
 //TODO: cleanup
+//TODO: multiple controllers
 struct ControllerState {
 	enum {
 		//TODO: rename the contents of this enum so it's more consistent with the Inputs struct
@@ -592,7 +659,6 @@ lua_State *L;
 
 //setPixel -- plot a single pixel to a surface
 //no idea why this isn't a SDL built-in in some way
-//TODO: expose this to lua code
 void setPixel(SDL_Surface *target, int x, int y, Uint32 color) {
 	Uint32 *px = (Uint32 *)target->pixels;
 	px[y*target->w+x]=color;
@@ -1071,8 +1137,8 @@ int c_stopsong(lua_State *LL) {
 	return 0;
 }
 
-//updateScreen -- 
-//TODO: maintain aspect ratio
+//updateScreen -- draw the final screen every frame
+//TODO: maintain aspect ratio in software mode
 void updateScreen() {
 	//just blit the surface to the window in software modes
 	if (display_mode==DisplayMode::soft) {
@@ -1083,6 +1149,7 @@ void updateScreen() {
 	else {
 		int w=VIEW_WIDTH;
 		int h=VIEW_HEIGHT;
+		//handle resizing to match aspect ratio
 		SDL_GetRendererOutputSize(renderer, &w, &h);
 		SDL_Rect target_size;
 		target_size.x=0;
@@ -1091,23 +1158,7 @@ void updateScreen() {
 		target_size.h=h;
 		double aspect_ratio_quig=(double)VIEW_WIDTH/VIEW_HEIGHT;
 		double aspect_ratio_display=(double)w/h;
-		/*
-		640x480 -> 1280x720
-		4/3 -> 16/9
-		4/3 < 16/9, so we alter the 1280 and preserve the 720
-		1280 / (16/9) -> 960x720 (4:3)
-
-
-		1280x720 -> 640x480
-		16/9 -> 4/3
-		16/9 > 4/3, so we preserve the 640 and alter the 480
-		480 / (4/3) -> 640x360
-
-		1280x720 -> 1280x960
-		16/9 -> 4/3, preserve the 1280, alter the 960
-
-		*/
-		std::cout << "q" << aspect_ratio_quig << "d" << aspect_ratio_display << "\n";
+		//std::cout << "q" << aspect_ratio_quig << "d" << aspect_ratio_display << "\n";
 		if (aspect_ratio_quig > aspect_ratio_display) {
 			target_size.h = ((double)target_size.w / aspect_ratio_quig);
 			target_size.y = (h - target_size.h) / 2;
@@ -1116,11 +1167,7 @@ void updateScreen() {
 			target_size.w = ((double)target_size.h * aspect_ratio_quig);
 			target_size.x = (w - target_size.w) / 2;
 		}
-		std::cout << "w" << target_size.w << "h" << target_size.h << "\n";
-		/*else if (aspect_ratio_screen < aspect_ratio_target) {
-			target_size.w = ((double)target_size.w / aspect_ratio_target);
-			target_size.x = (w - target_size.w) / 2;
-		}*/
+		//std::cout << "w" << target_size.w << "h" << target_size.h << "\n";
 		SDL_Texture *scr = SDL_CreateTextureFromSurface(renderer, program_surface);
 		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, scr, NULL, &target_size);
@@ -1247,8 +1294,11 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	//read options, filename
-	if (handleArgs(argc, argv)) {
-		std::cerr << "fatal error: could not handle arguments!" << std::endl;
+	int args_quit = handleArgs(argc, argv);
+	if (args_quit) {
+		if (args_quit != 2) {
+			std::cerr << "fatal error: could not handle arguments!" << std::endl;
+		}
 		return 1;
 	}
 	//check for ".quig" as the end
@@ -1309,7 +1359,7 @@ int main(int argc, char* argv[]) {
 			std::cerr<<"notice: vsync disabled\n";
 		}
 		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | vsync_on);
-		//TODO: should we just go and attempt to try software mode?
+		//TODO: should we just go and attempt to try software mode? I think just failing out is the right thing, most machines should not be using software mode unless something is wrong
 		if (renderer == NULL) {
 			std::cerr << "fatal error: could not create renderer!" << std::endl;
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "quig fatal error!", "Fatal error:\nCould not create renderer!", window);
@@ -1378,6 +1428,8 @@ int main(int argc, char* argv[]) {
 		lua_pop(L,1);
 		return 1;
 	}
+	//hide the mouse
+	SDL_ShowCursor(SDL_DISABLE);
 	//the main loop itself
 	int second_count=0;
 	while (running) {

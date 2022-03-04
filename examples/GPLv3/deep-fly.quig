@@ -1,5 +1,5 @@
 -- deep-fly -- a 3D action game where you use your lock-on attack to strike down enemies and slide through the skies on rails!
--- deep-fly is (C) 2020 B.M.Deeal. deep-fly is distributed under the GPLv3.
+-- deep-fly is (C) 2022 B.M.Deeal. deep-fly is distributed under the GPLv3.
 
 -- This file expects word-wrapping and a tab width of 4.
 
@@ -12,11 +12,13 @@
 		[d-pad  start  a b]
 	* A-button -- jump if not in air, lock-on attack if in air
 	* B-button -- tap to go faster on rails
-	* D-pad -- move, select target by aiming and moving towards it
+	* D-pad -- left and right move you to the side, up moves you ahead, and down moves you back
 	* Start -- pause
 	
 	-how to play-
 	Run forward through each stage, avoiding obstacles, defeating enemies, and sliding down rail paths. 
+	
+	TODO: anything at all; might probably make a general "3D" example template and then base this on that; would copy a lot from astro-burst but that game has its own issues with how it handles 3D calculations
 	
 --]]
 
@@ -24,4 +26,7 @@ function init()
 end
 
 function step()
+	cls(0,0,0)
+	text("deep-fly (pre-alpha)",0,0,1,0)
+	spr(view_width/2, view_height/2, 2, 0, 0)
 end

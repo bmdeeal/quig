@@ -51,15 +51,18 @@
 	---
 	
 	TODO:
-	* trophies -- if you've completed all stages on a given speed class or slower, you should be given a trophy for it
+	* trophies -- if you've completed all stages on a given speed class or slower, you should be given a trophy for it, need to do art+code for that
+	* half-side hazards -- should be really easy, just check if you're on one side of the middle line or not; could do fun stuff like half-side slow or half-side time, could make the player have to dodge around a bit, fun stuff
+	* split-road object -- should probably be easy, we just mark an area in the middle where we treat things as out of bounds
 	* decorative objects -- stages look a bit plain, might throw in some terrain types that don't actually affect the ship, they're just drawn differently [in progress!]
-	* replays -- should probably try the naive method first of just adding to the table every frame, but at the same time, that just sounds expensive in terms of memory
+	* replays -- should probably try the naive method first of just adding to the table every frame, but at the same time, that just sounds expensive in terms of memory, could do a thing where it stores button up/downs for each frame and how long between them, astro-burst only has 4 relevant buttons too
 	* how to play screen -- might just have it be a course with text on the screen explaining the controls while you drive through the various terrain types
 	* more levels [in progress!]
 	* major code cleanups -- in particular, a lot of things are done in a rather ad-hoc fashion
 	* the code commenting in some spots is bad -- we explain everything because this is an example, but some stuff is underexplained while some stuff is way overexplained
-	* score/time saving (quig now has some file handling support but it needs major testing)
+	* score/time saving (quig now has some file handling support but it needs major testing and is in flux)
 	* music/sound -- quig's stance on audio is deeply in flux and I need to figure out what I'm doing there
+	* verticality? might give the courses some Z-axis movement, and it'd be neat to affect speed based on the vertical angle, but I don't know, I'd need to do some testing for whether it looks/feels good and I might need to do a decent bit of work that might end up getting scrapped
 --]]
 
 
@@ -320,11 +323,13 @@ levels.init=function()
 end
 
 --objects are generated with linearly interpolated widths and offsets
-levels.add=function(w,o,d,f)
+--TODO: use the side parameter (-1 for left, 1 for right, 0 for center)
+levels.add=function(w,o,d,f,s)
 	if not f then f=0 end
+	if not s then s=0 end
 	local n=levels.length+1
 	levels.length=n
-	levels[n]={width=w, offset=o, distance=d, flag=f} 
+	levels[n]={width=w, offset=o, distance=d, flag=f, side=s} 
 end
 
 --get track data to generate objects with
@@ -1907,6 +1912,7 @@ end
 --show the warning
 gmode.warning.step=function()
 	cls(50,50,50)
+	spr(view_width-16,view_height-16,2,0,0)
 	text("Welcome to astro-burst!",0,0,1,0)
 	text("\n(C) 2022 B.M.Deeal\nLicensed under GPLv3.\n\n---\n\n\n\nThis game features flickering\nlights and flashing imagery.\nPlayer discretion is advised.",0,8,1,3)
 	text("\nPhotosensitivity warning:",0,8*6,1,0)

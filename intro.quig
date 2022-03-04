@@ -150,7 +150,8 @@ player={
 	yd=0,
 	--top speed for each direction
 	maxspeed_x=1.75,
-	maxspeed_y=4,
+	maxspeed_y=4, --jumping
+	maxspeed_yfall=3, --falling
 	--physics
 	friction=0.1, --how much to slow down horizontally
 	accel=0.2, --horizontal acceleration during input (has to overcome friction)
@@ -236,7 +237,7 @@ player.update=function(self)
 	end
 	--limit the player's speed
 	if self.xd>self.maxspeed_x then self.xd=self.maxspeed_x end
-	if self.yd>self.maxspeed_y then self.yd=self.maxspeed_y end
+	if self.yd>self.maxspeed_yfall then self.yd=self.maxspeed_yfall end
 	if self.xd<-self.maxspeed_x then self.xd=-self.maxspeed_x end
 	if self.yd<-self.maxspeed_y then self.yd=-self.maxspeed_y end
 	--move the player

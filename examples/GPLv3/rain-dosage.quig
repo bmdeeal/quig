@@ -212,7 +212,7 @@ player.update=function(this)
 		xd=this.speed
 		horiz=true
 	end
-	--account for diagonal movement (if I move 2 units up each frame, and also move 2 units right each frame, I'll be moving 2*math.sqrt(2) frames diagonally each frame -- so we divide by that factor)
+	--account for diagonal movement (if I move 2 units up each frame, and also move 2 units right each frame, I'll be moving 2*math.sqrt(2) pixels diagonally each frame -- so we divide by that factor)
 	if horiz and vert then
 		yd=yd/sq2
 		xd=xd/sq2
@@ -260,7 +260,7 @@ state.swap=function(this, target)
 	this.current=target
 end
 
---change state, initalize it
+--change state, initialize it
 state.set=function(this, target)
 	this:swap(target)
 	this.current:init()
