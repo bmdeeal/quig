@@ -208,10 +208,10 @@ splits.update=function()
 	end
 end
 
+--get splits ready
 splits.setup()
 
 --add a split
---wow, this got ugly really fast
 splits.add=function()
 	--clean up some ugliness, although I remember reading on the lua wiki that apparently doing this is faster since accessing globals is slower than accessing locals
 	local cur_stage=gmode.stage_select.selection
@@ -231,7 +231,6 @@ splits.add=function()
 	splits.showvalue=player.runtime-last_best
 	splits.index=splits.index+1
 end
-
 
 --background colors for each speed class
 --they used to be drawn exactly, but now there's the gradient modifying them, so this is more of a "middle of the screen" color than anything specific since the background gradient system brightens the colors passed to them
@@ -378,7 +377,8 @@ end
 --levels
 --each level actually just resets the levels table entirely and repopulates it programmatically
 --the details for the 4th parameter for levels.add can be found in objects.add (importantly, checkpoints are 1)
---TODO: constants for road object types to make this more readable
+--TODO: add constants for road object types to make this more readable
+--TODO: every level should be longer
 levels.create[1]=function()
 	levels.start()
 	levels.add(1400,2900,20)
@@ -748,7 +748,7 @@ levels.create[7]=function()
 	levels.finish()
 end
 
---TODO: more levels (I want 8 at the minimum)
+--TODO: more levels (I want 8 at the minimum, maybe might do like 15)
 
 --smoothly move to a point
 --repeatedly doing it to a variable slides it continually somewhere
@@ -799,7 +799,7 @@ particles.draw=function()
 end
 
 --update all of the particles
---probably should only update the visible half of the particles each frame, but alas
+--probably should only update the visible half of the particles each frame, but eh
 particles.update=function()
 	for ii=1,particles.max do
 		if particles[ii].active==1 then
@@ -844,7 +844,7 @@ objects.init=function()
 			tx=0,ty=0, --texture item
 			x=0,y=0,z=0, --position
 			width=0, --course width
-			passed=false, --has the object been passed by the player yet (TODO: probably could sort where to draw the player object using this? haven't thought about it, but we could do two draw passes)
+			passed=false, --has the object been passed by the player yet
 			odd=0 --do different things every other object (like the overhead signs, or the center-line dots)
 		}
 	end
@@ -903,12 +903,18 @@ end
 --this feels like it should be slow, but there really isn't ever that much on screen
 --still, it probably could be heavily, heavily optimized (in particular, we constantly re-divide for the scale despite a lot of things being at the same z distance, but I'm not touching that right now)
 --it's also a bit really messy
---TODO: a call to player.draw should probably end up in here
 objects.draw=function()
-	--objects are expected to be pre-sorted
+	--objects are expected to be pre-sorted, so we don't do it here
 	--table.sort(objects,objects.cmp) 
+	local nearest=300
 	for ii=1,objects.max do
 		if objects[ii].active==1 then
+			--draw the player before any objects that are "in front"
+			--also, my math might be wrong somewhere -- player.z is 8, but I think that actually only gets used to make sure it's scaled properly, I just eyeballed it with the below debug check and picked 14 as a good z value
+			if player.should_draw and objects[ii].z<14  then
+				player.drawReal()
+			end
+			--if (objects[ii].z<nearest) then nearest=objects[ii].z end --debug
 			local rx,ry,rs
 			if objects[ii].z<=220 then
 				--draw left side
@@ -948,6 +954,9 @@ objects.draw=function()
 			end
 		end
 	end
+	--draw the player if it hasn't been
+	if player.should_draw then player.drawReal() end
+	--text("n=" .. nearest,64,64,1,1) --debug
 end
 
 --add objects
@@ -1188,10 +1197,10 @@ player.update=function()
 	end
 end
 
---draw the player
---TODO: kinda should see if I can nudge this somewhere in the object drawing routine so it's z-ordered properly instead of always in front of objects
-player.draw = function()
-	local rx,ry,rs=camera.get2D(player.x,0,player.z)
+--actually draw the player
+--this gets called in objects.draw!
+player.drawReal=function()
+	local rx,ry,rs=camera.get2D(player.x,-20,player.z)
 	local anim=0
 	if (t%7 >5) then anim=1 end
 	--shake when near max speed
@@ -1199,6 +1208,14 @@ player.draw = function()
 		ry=ry+1
 	end
 	spr(rx,ry,rs,0,anim)
+	player.should_draw=false
+end
+
+--mark if the player should be drawn
+--this function used to actually draw the player
+--only works if objects.draw gets called
+player.draw=function()
+	player.should_draw=true
 end
 
 --reset most things
@@ -1286,7 +1303,7 @@ end
 --this entire bit of code is hideous and supremely ad-hoc and you'll probably want a better structure if you decide to add an attract sequence to your own games
 --although, I do like how I separated it into sections and how nice and automatic it works, but it's still not anything resembling a robust animation system
 --this code only gets away with being like this because it's not actually interactive at all; it's all very fragile
---half tempted to design a second attract, but I should probably put a how-to-play screen there then
+--half tempted to design a second attract sequence, but I should probably put a how-to-play screen there then
 gmode.attract.init=function()
 	local this=gmode.attract --I wrote this before I was better at Lua, it really should be something like gmode.attract.init=function(this) or whatever and I'd call gmode.attract:init(), but whatever
 	--each of the individual parts, it's a table full of functions
@@ -1660,7 +1677,7 @@ gmode.ingame.step=function()
 	text(pspeed,view_width-6*8,view_height-16,2,2+flip)
 	--draw out-of bounds text
 	if not oobt then oobt=0 end --dirty hack
-	--we show the oob stuff for a few frames after returning to the track
+	--we continue to show the oob stuff for a few frames after returning to the track
 	if player.oob then
 		player.oobtimer=20
 	end
@@ -1793,9 +1810,9 @@ end
 
 --handle the game over screen
 gmode.time_over.step=function()
-	cls(8,8,16)
-	if player.speed<0.1 then player.speed=-0.1 end
-	player.xd=0
+	cls(8,8,16) --dark background overrides everything
+	if player.speed<0.1 then player.speed=-0.1 end --if we're stopped, zoom out
+	player.xd=0 --move forward
 	camera.target(player.x)
 	objects.update()
 	objects.draw()
@@ -1843,7 +1860,7 @@ end
 --handle the end of stage screen
 gmode.stage_clear.step=function()
 	--force the player into the middle of the goal area
-	--this looks goofy if you hit the goal while going really slow and are far from the middle
+	--TODO: this looks a little goofy if you hit the goal while going really slow and are far from the middle, it should probably just stop after a bit if it's too far or something
 	local hmove=20
 	if player.x > player.offset+1 or player.x < player.offset-1 then
 		player.x=(player.offset+player.x*hmove)/(hmove+1)
@@ -1903,8 +1920,7 @@ gmode.stage_clear.step=function()
 end
 
 --warning text+copyright info
---largely a courtesy, the attract mode is flashy, but the whole game is fairly flashy
---TODO: the actual warning text is a bit... non-descriptive
+--the attract mode very flashy, but the whole game is fairly flashy too, especially on chaos
 gmode.warning.init=function()
 	init_most()
 end
@@ -1949,11 +1965,9 @@ gmode.stage_select.step=function()
 	player.speed=speed_class
 	particles.update()
 	particles.draw()
-	
 	--top text
 	text("stage", view_width-8*5-6*16,0 ,1, 0)
 	text("select", view_width-6*16,0 ,2, 1)
-	
 	--draw which speed class we're on
 	local scpx, scpy, scpw, scph --holds the positions for the speed class text
 	scpw=#sc[speed_class].name*8 * this.classgrow --width
@@ -1971,7 +1985,6 @@ gmode.stage_select.step=function()
 	if this.classgrow<1 then --bounds check
 		this.classgrow=1
 	end
-	
 	--pick speed class
 	if key(key_up)==1 then --slower
 		if speed_class > 1 then
@@ -1992,7 +2005,6 @@ gmode.stage_select.step=function()
 	if speed_class>=6 and this.classgrow<1.4 then
 		this.classgrow=math.min(3, this.classgrow+math.random()*0.065)
 	end
-	
 	--pick stage, have it slide in smoothly
 	if key(key_left)==1 then
 		this.selection= this.selection-1
@@ -2002,18 +2014,15 @@ gmode.stage_select.step=function()
 		this.selection= this.selection+1
 		this.shift=view_width
 	end
-	
 	--clamp stages
 	if this.selection<1 then this.selection=stages end
 	if this.selection>stages then this.selection=1 end
-	
 	--show best score if it exists
 	if best_scores[speed_class][this.selection] then
 		local bsstr = "best score:" .. math.floor(best_scores[speed_class][this.selection])
 		text(bsstr,1,(view_height+32)/2-3-16-1,1,2)
 		text(bsstr,0,(view_height+32)/2-3-16,1,3)
 	end
-	
 	--show best time if it exists
 	local btstr=""
 	if best_times[speed_class][this.selection] then
