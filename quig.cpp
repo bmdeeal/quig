@@ -50,9 +50,9 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
-#ifndef QUIG_NOSOUND
-#include <SDL_mixer.h>
-#endif
+//#ifndef QUIG_NOSOUND
+//#include <SDL_mixer.h>
+//#endif
 
 extern "C" {
 #include <lua.h>
@@ -60,6 +60,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include <stdlib.h>
+//#include <math.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -69,6 +70,7 @@ extern "C" {
 #include "font8x8_basic.h"
 #include "font8x8_hiragana.h"
 #include "quig.h"
+#include "Blip_Buffer.h"
 
 //constants
 const char *QUIG_VERSION="1.2-beta1"; //version string -- major.minor-status
@@ -82,15 +84,22 @@ const int VIEW_HEIGHT=144; //9 tiles, 18 characters
 //sound stuff
 const int NUM_CHANNELS = 8;
 const int AUDIO_MAX = 1; //31; //00-30 -- we're moving away from this
-bool sound_enabled=false; //has audio been initialized
+bool sound_enabled=false; //is audio allowed?
+bool sound_active = false; //has sound been initialized?
 int sound_freq=48000;
 int buffer_len=2048;
+const int samples_frame = 800; //how many samples are in a typical frame
+int samples_frame_offset = 0; //how many samples +/- should we slop by to keep things in sync
+const int samples_frame_offset_max = 50; //how far can we slop before it's too much?
+SDL_AudioDeviceID audio_id=0;
+Sint16 audio_buffer[samples_frame + samples_frame_offset_max];
+Sint16 empty_buffer[samples_frame]; //guaranteed empty buffer
 
 //filename of game
 std::string arg_name;
 //the above, without the extension
 std::string base_name;
-
+/*
 #ifndef QUIG_NOSOUND
 //music
 struct quig_Music {
@@ -123,7 +132,8 @@ struct quig_Music {
 	}
 };
 quig_Music songs[AUDIO_MAX];
-
+*/
+/*
 //samples
 struct quig_Sound {
 	Mix_Chunk *snd=NULL;
@@ -147,7 +157,8 @@ struct quig_Sound {
 };
 quig_Sound samples[AUDIO_MAX];
 #endif
-
+*/
+/*
 //TODO: log errors
 void initAudio() {
 	sound_enabled=false;
@@ -199,6 +210,7 @@ void initAudio() {
 	}
 	#endif
 }
+*/
 
 //these were constants, now they aren't
 //these get resized, but just in case something goes wrong, we initialize them to 1x scale
@@ -216,6 +228,20 @@ void setWindowScale(int s) {
 	window_scale=s;
 	window_width=(VIEW_WIDTH*window_scale);
 	window_height=(VIEW_HEIGHT*window_scale);
+}
+
+void generateTone(int n) {
+	for (int ii = 0; ii < samples_frame + samples_frame_offset; ii++) {
+		if (n <= 1) {
+			audio_buffer[ii] = 0;
+		}
+		else if (ii % n < 10) {
+			audio_buffer[ii] = 3000;
+		}
+		else {
+			audio_buffer[ii] = -3000;
+		}
+	}
 }
 
 //show the arguments you can use
@@ -245,7 +271,7 @@ enum class DisplayMode {
 DisplayMode display_mode=DisplayMode::hard_novsync; //TODO: make this a compile-time option for what is default?
 bool fullscreen=false; //TODO: fullscreen in software mode ignores aspect ratio, need to fix that
 
-//TODO: add a --help and -? option
+//parse the arugment list
 int handleArgs(int argc, char **argv) {
 	int size=-1; //automatically set the screen scale based on screen width and screen height (minus 64)
 	int user_size = -1; //how much the user wants the scale
@@ -1075,7 +1101,7 @@ int c_getfps(lua_State *LL) {
 }
 
 
-
+/*
 int c_playsound(lua_State *LL) {
 	int sound=(int)lua_tonumber(LL,1);
 	int channel=(int)lua_tonumber(LL,2);
@@ -1136,6 +1162,7 @@ int c_stopsong(lua_State *LL) {
 	#endif
 	return 0;
 }
+*/
 
 //updateScreen -- draw the final screen every frame
 //TODO: maintain aspect ratio in software mode
@@ -1189,12 +1216,14 @@ void registerLuaFn() {
 	lua_register(L, "getfps", c_getfps);
 	lua_register(L, "readfile", c_readfile);
 	lua_register(L, "writefile", c_writefile);
+	/*
 	lua_register(L, "playsong", c_playsong);
 	lua_register(L, "loopsong", c_loopsong);
 	lua_register(L, "stopsong", c_stopsong);
 	lua_register(L, "playsound", c_playsound);
 	lua_register(L, "loopsound", c_loopsound);
 	lua_register(L, "stopsound", c_stopsound);
+	*/
 	//size of the display
 	lua_pushnumber(L, VIEW_WIDTH);
 	lua_setglobal(L, "view_width");
@@ -1220,6 +1249,7 @@ void registerLuaFn() {
 //initialization, main loop
 int main(int argc, char* argv[]) {
 	atexit(cleanup);
+	std::cerr << "Welcome to quig! (C) 2022 B.M.Deeal.\nquig is distributed under the GNU GPLv3.\n";
 	std::cerr << "notice: quig version " << QUIG_VERSION << " now init...\n";
 	
 	//attempt to initialize Lua
@@ -1237,13 +1267,56 @@ int main(int argc, char* argv[]) {
 		std::cerr << "fatal error: could not initialize SDL! " << SDL_GetError() << std::endl;
 		return 1;
 	}
+
+	if (sound_enabled) {
+		std::cerr << "notice: initializing audio...\n";
+		if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+			std::cerr << "error: couldn't initialize SDL audio!\n";
+			sound_active = false;
+		}
+		else {
+			SDL_AudioSpec want, have;
+			SDL_zero(want);
+			want.freq = sound_freq;
+			want.format = AUDIO_S16SYS;
+			want.channels = 1;
+			want.samples = buffer_len;
+			want.callback = NULL;
+			audio_id = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+			if (audio_id) {
+				sound_active = true;
+				std::cerr << "notice: enabled audio id " << audio_id <<" with frequency " << have.freq << " and buffer size " << have.samples <<".\n";
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+				SDL_QueueAudio(audio_id, empty_buffer, samples_frame * 2);
+			}
+			else {
+				sound_active = false;
+				sound_enabled = false;
+				std::cerr << "error: could not open audio device! Audio is disabled.\n";
+			}
+		}
+	}
+	else {
+		std::cerr << "notice: audio is disabled.";
+		sound_active = false;
+	}
+
+	if (sound_active) {
+
+	}
 	
 	//TODO: muck about with, what a total mess
 	//attempt to initialize joysticks
 	if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK)) {
 		std::cerr << "notice: detected " << SDL_NumJoysticks() << " joysticks!" << std::endl;
 		if (SDL_NumJoysticks() > 1) {
-			std::cerr << "warning: quig only uses the first controller found; for best results, unplug other controllers!\n";
+			std::cerr << "warning: quig currently only uses the first controller found; for best results, unplug other controllers!\n";
 		}
 		if (SDL_IsGameController(0)) {
 			controller = SDL_GameControllerOpen(0);
@@ -1412,10 +1485,11 @@ int main(int argc, char* argv[]) {
 	//setup recording
 	initRecording();
 	
-	//setup audio, which also looks for audio files
+	//setup audio
 	do_cls(0,0,0);
 	updateScreen();
-	initAudio();
+	//initAudio();
+	SDL_PauseAudioDevice(audio_id, 0);
 	
 	//main loop
 	bool running = true;
@@ -1432,7 +1506,9 @@ int main(int argc, char* argv[]) {
 	SDL_ShowCursor(SDL_DISABLE);
 	//the main loop itself
 	int second_count=0;
+	int debug_audio_frames = 0;
 	while (running) {
+		debug_audio_frames=(debug_audio_frames+1)%60;
 		timer.setTime();
 		bool sshot=false;
 		//handle events
@@ -1443,6 +1519,7 @@ int main(int argc, char* argv[]) {
 			}
 			//key inputs
 			//TODO: joypad
+			//TODO: move to function
 			else if (e.type == SDL_KEYDOWN && e.key.repeat==0) {
 				switch (e.key.keysym.sym) {
 					//quit
@@ -1670,7 +1747,33 @@ int main(int argc, char* argv[]) {
 		doRecording();
 		//draw everything
 		updateScreen();
-		
+
+		if (sound_active) {
+			int queued_length = SDL_GetQueuedAudioSize(audio_id);
+			//DEBUG AUDIO STUFF
+			std::cerr << "debug: buffered " << queued_length << " samples.\n";
+			if (inputs_final.keys[inputs.A]) {
+				if (debug_audio_frames > 30) {
+					generateTone(200);
+				}
+				else {
+					generateTone(400);
+				}
+			}
+			else {
+				generateTone(0);
+			}
+			SDL_QueueAudio(audio_id, audio_buffer, (samples_frame + samples_frame_offset) * 2);
+			if (queued_length > 3072) {
+				samples_frame_offset = -samples_frame_offset_max;
+			}
+			else if (queued_length < 1024) {
+				samples_frame_offset = samples_frame_offset_max;
+			}
+			else {
+				samples_frame_offset = 0;
+			}
+		}
 		//calculate FPS
 		second_count++;
 		if (second_count > FPS_RATE) {

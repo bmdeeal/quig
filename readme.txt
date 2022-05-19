@@ -5,12 +5,14 @@ quig - quick Lua-based game system
 ===
 Legal:
 
-quig is distributed under the GPLv3, see quig-license.txt for details.
+quig is distributed under the GNU GPLv3, see quig-license.txt for details.
 In addition, see the files under other-licenses/ for the licensing details of other libraries that quig uses, such as SDL and Lua.
 
 Sources for many libraries are provided in libraries-w32/sources.7z.
 
 Several of the example files are under the GPLv3, several are under CC0 (effectively no restrictions, either public domain or as close as possible in your jurisdiction). Check the license if you want to copy the code into your own game or build off of the examples!
+
+quig uses the Blip_Buffer library by Shay Green, distributed under the GNU LGPLv2.1. See other-licenses/LICENSE.Blip_Buffer.txt for details.
 
 ===
 About:
